@@ -7,10 +7,33 @@ from rl_modules.ddpg_agent import ddpg_agent
 import random
 import torch
 
+
+
+
+
 """
 train the agent, the MPI part code is copy from openai baselines(https://github.com/openai/baselines/blob/master/baselines/her)
 
 """
+
+# gy = True: gym environment, False:AntReacher
+# log = True: wandb
+# her = True: HER Strategy   False: DDPG
+# PS: wandb记录的表名需要手动改。在wandb.init和ddpg_agent.py里。
+import design_env
+gy = True
+log = False
+her = True
+
+if(log == True):
+    import wandb
+    os.environ["WANDB_API_KEY"] = "7345a4ba788b2d78ab6a78d185784b2ea818317e"
+    wandb.login()
+    wandb.init(
+        project="GCRLbaselines", name="HER"
+    )
+    os.environ["WANDB_MODE"] = "offline"
+
 def get_env_params(env):
     obs = env.reset()
     # close the environment
@@ -24,19 +47,30 @@ def get_env_params(env):
 
 def launch(args):
     # create the ddpg_agent
-    env = gym.make(args.env_name)
-    # set random seeds for reproduce
-    env.seed(args.seed + MPI.COMM_WORLD.Get_rank())
-    random.seed(args.seed + MPI.COMM_WORLD.Get_rank())
-    np.random.seed(args.seed + MPI.COMM_WORLD.Get_rank())
-    torch.manual_seed(args.seed + MPI.COMM_WORLD.Get_rank())
-    if args.cuda:
-        torch.cuda.manual_seed(args.seed + MPI.COMM_WORLD.Get_rank())
-    # get the environment parameters
-    env_params = get_env_params(env)
+    if (gy == True):
+        env = gym.make(args.env_name)
+        # set random seeds for reproduce
+        env.seed(args.seed + MPI.COMM_WORLD.Get_rank())
+        random.seed(args.seed + MPI.COMM_WORLD.Get_rank())
+        np.random.seed(args.seed + MPI.COMM_WORLD.Get_rank())
+        torch.manual_seed(args.seed + MPI.COMM_WORLD.Get_rank())
+        if args.cuda:
+            torch.cuda.manual_seed(args.seed + MPI.COMM_WORLD.Get_rank())
+        # get the environment parameters
+        env_params = get_env_params(env)
+    else:
+        env = design_env.design_env()
+        end_goal = env.get_next_goal(True)
+        observation = env.reset_sim(end_goal)
+
+        env_params = {'obs':observation.shape[0],
+                    'goal':end_goal.shape[0],
+                    'action':env.action_dim,
+                    'action_max':env.action_bounds_high,
+                    'max_timesteps':env.max_actions}
     # create the ddpg agent to interact with the environment 
-    ddpg_trainer = ddpg_agent(args, env, env_params)
-    ddpg_trainer.learn()
+    ddpg_trainer = ddpg_agent(args, env, env_params, gy, her)
+    ddpg_trainer.learn(log)
 
 if __name__ == '__main__':
     # take the configuration for the HER
