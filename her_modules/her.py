@@ -11,7 +11,7 @@ class her_sampler:
         self.reward_func = reward_func
 
 
-    def sample_her_transitions(self, episode_batch, batch_size_in_transitions,her,gy):
+    def sample_her_transitions(self, episode_batch, batch_size_in_transitions,gy,her):
         T = episode_batch['actions'].shape[1]
         rollout_batch_size = episode_batch['actions'].shape[0]
         batch_size = batch_size_in_transitions
@@ -31,7 +31,6 @@ class her_sampler:
             future_ag = episode_batch['ag'][episode_idxs[her_indexes], future_t]
             transitions['g'][her_indexes] = future_ag
         # to get the params to re-compute reward
-
         if(gy == True):
             transitions['r'] = np.expand_dims(self.reward_func(transitions['ag_next'], transitions['g'], None), 1)
         else:

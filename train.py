@@ -21,7 +21,7 @@ train the agent, the MPI part code is copy from openai baselines(https://github.
 # her = True: HER Strategy   False: DDPG
 # PS: wandb记录的表名需要手动改。在wandb.init和ddpg_agent.py里。
 import design_env
-gy = True
+gy = False
 log = False
 her = True
 
@@ -30,7 +30,7 @@ if(log == True):
     os.environ["WANDB_API_KEY"] = "7345a4ba788b2d78ab6a78d185784b2ea818317e"
     wandb.login()
     wandb.init(
-        project="GCRLbaselines", name="HER"
+        project="GCRLbaselines", name="HER_FetchPickAndPlace_seed1",group="HER_FetchPickAndPlace"
     )
     os.environ["WANDB_MODE"] = "offline"
 
@@ -60,7 +60,7 @@ def launch(args):
         env_params = get_env_params(env)
     else:
         env = design_env.design_env()
-        end_goal = env.get_next_goal(True)
+        end_goal = env.get_next_goal()
         observation = env.reset_sim(end_goal)
 
         env_params = {'obs':observation.shape[0],

@@ -73,9 +73,9 @@ class ddpg_agent:
         """
         # start to collect samples
         for epoch in range(self.args.n_epochs):    #1000
-            for _ in range(self.args.n_cycles):      #100
+            for _ in range(self.args.n_cycles):      #100    episode
                 mb_obs, mb_ag, mb_g, mb_actions = [], [], [], []
-                for _ in range(self.args.num_rollouts_per_mpi):
+                for _ in range(self.args.num_rollouts_per_mpi):  #1
                     # reset the rollouts
                     ep_obs, ep_ag, ep_g, ep_actions = [], [], [], []
                     # reset the environment
@@ -105,7 +105,7 @@ class ddpg_agent:
                         ep_obs.append(obs.copy())
                         ep_ag.append(ag.copy())
                     else:
-                        g = self.env.get_next_goal(True)
+                        g = self.env.get_next_goal()
                         obs = self.env.reset_sim(g)
                         ag = obs[:3]
                         for t in range(self.env_params['max_timesteps']):
@@ -119,11 +119,9 @@ class ddpg_agent:
                     # re-assign the observation
                             obs = obs_new
                             ag = ag_new
-
                         ep_obs.append(obs.copy())
                         ep_ag.append(ag.copy())
 
-                    
                     mb_obs.append(ep_obs)
                     mb_ag.append(ep_ag)
                     mb_g.append(ep_g)
@@ -146,7 +144,7 @@ class ddpg_agent:
             # start to do the evaluation
             success_rate = self._eval_agent()
             if (log == True):
-                wandb.log({"FetchSlide/success rate": success_rate})
+                wandb.log({"FetchPickAndPlace/success rate": success_rate})
             
             if MPI.COMM_WORLD.Get_rank() == 0:
                 print('[{}] epoch is: {}, eval success rate is: {:.3f}'.format(datetime.now(), epoch, success_rate))
@@ -171,7 +169,7 @@ class ddpg_agent:
         action += self.args.noise_eps * self.env_params['action_max'] * np.random.randn(*action.shape)
         action = np.clip(action, -self.env_params['action_max'], self.env_params['action_max'])
         # random actions...
-        random_actions = np.random.uniform(low=-self.env_params['action_max'], high=self.env_params['action_max'], \
+        random_actions = np.random.uniform(low=-self.env_params['action_max'], high=self.env_params['action_max'], 
                                             size=self.env_params['action'])
         # choose if use the random actions
         action += np.random.binomial(1, self.args.random_eps, 1)[0] * (random_actions - action)
@@ -192,7 +190,7 @@ class ddpg_agent:
                        'obs_next': mb_obs_next,
                        'ag_next': mb_ag_next,
                        }
-        transitions = self.her_module.sample_her_transitions(buffer_temp, num_transitions,self.her,self.gy)
+        transitions = self.her_module.sample_her_transitions(buffer_temp, num_transitions,self.gy,self.her)
         obs, g = transitions['obs'], transitions['g']
         # pre process the obs and g
         transitions['obs'], transitions['g'] = self._preproc_og(obs, g)
@@ -216,7 +214,7 @@ class ddpg_agent:
     # update the network
     def _update_network(self):
         # sample the episodes
-        transitions = self.buffer.sample(self.args.batch_size)
+        transitions = self.buffer.sample(self.args.batch_size)   #256
         # pre-process the observation and goal
         o, o_next, g = transitions['obs'], transitions['obs_next'], transitions['g']
         transitions['obs'], transitions['g'] = self._preproc_og(o, g)
@@ -271,7 +269,7 @@ class ddpg_agent:
     # do the evaluation
     def _eval_agent(self):
         total_success_rate = []
-        for _ in range(self.args.n_test_rollouts):
+        for _ in range(self.args.n_test_rollouts):  #100
             per_success_rate = []
             if (self.gy == True):
                 observation = self.env.reset()
@@ -289,15 +287,18 @@ class ddpg_agent:
                     per_success_rate.append(info['is_success'])
                 
             else:
-                g = self.env.get_next_goal(True)
+                g = self.env.get_next_goal()
                 obs = self.env.reset_sim(g)
                 for t in range(self.env_params['max_timesteps']):
-                    action = self.env.action_space.sample()
+                    with torch.no_grad():
+                        input_tensor = self._preproc_inputs(obs, g)
+                        pi = self.actor_network(input_tensor)
+                        # convert the actions
+                        action = pi.detach().cpu().numpy().squeeze()
                     obs = self.env.execute_action(action)
                     per_success_rate.append(self.env.success(obs,g))
-                    if (self.env.success(obs,g)):
-                        g = self.env.get_next_goal(True)
-                        obs = self.env.reset_sim(g)
+
+
                 
             total_success_rate.append(per_success_rate)
 

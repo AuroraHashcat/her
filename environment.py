@@ -8,12 +8,12 @@ import gym
 
 class Environment:
 
-    def __init__(self, model_name, goal_space_train, goal_space_test, project_state_to_end_goal, end_goal_thresholds, initial_state_space, subgoal_bounds, project_state_to_subgoal, subgoal_thresholds, max_actions = 1200, num_frames_skip = 10, show = False):
+    def __init__(self, model_name, goal_space_train, goal_space_test, project_state_to_end_goal, end_goal_thresholds, initial_state_space, subgoal_bounds, subgoal_thresholds, max_actions = 1200, num_frames_skip = 10, show = False):
 
         self.name = model_name
 
         # Create Mujoco Simulation
-        self.model = load_model_from_path("/home/wuchenxi/project/mujoco_files/ant_reacher.xml")#+model_name)
+        self.model = load_model_from_path("/home/wuchenxi/project/mujoco_files/"+ model_name)
         self.sim = MjSim(self.model)
 
         # Set dimensions and ranges of states, actions, and goals in order to configure actor/critic networks
@@ -76,16 +76,16 @@ class Environment:
             np.ndarray，形状为 (N,)，每个 achieved goal 与对应的 desired goal 的奖励值。
         """
         rewards = np.zeros(states.shape[0])  # 初始化奖励数组
-        #project_state_to_end_goal = lambda states: states[1]
+        project_state_to_end_goal = lambda state: state[:3]
 
         for i in range(states.shape[0]):  # 遍历每对 (state, end_goal)
             state = states[i]
             end_goal = end_goals[i]
             goal_achieved = True
 
-            #proj_end_goal = project_state_to_end_goal(state)
+            proj_end_goal = project_state_to_end_goal(state)
             for j in range(len(state)):  # 检查每个维度是否满足阈值
-                if np.abs(end_goal[j] - state[j]) > self.end_goal_thresholds[j]:
+                if np.abs(end_goal[j] - proj_end_goal[j]) > self.end_goal_thresholds[j]:
                     goal_achieved = False
                     break
 
@@ -98,17 +98,17 @@ class Environment:
         return rewards
 
     def success(self, state, end_goal):
-            goal_achieved = 1
+        goal_achieved = 1
 
-            project_state_to_end_goal = lambda state: state[:3]
-            proj_end_goal = project_state_to_end_goal(state)
+        project_state_to_end_goal = lambda state: state[:3]
+        proj_end_goal = project_state_to_end_goal(state)
 
-            for j in range(len(proj_end_goal) - 1):
-                if np.all(np.absolute(end_goal[j] - proj_end_goal[j])) > self.end_goal_thresholds[j]:
-                    goal_achieved = 0
-                    break
+        for j in range(len(proj_end_goal)):
+            if (np.absolute(end_goal[j] - proj_end_goal[j]) > self.end_goal_thresholds[j]):
+                goal_achieved = 0
+                break
 
-            return goal_achieved
+        return goal_achieved
 
     
     # Get state, which concatenates joint positions and velocities
@@ -121,7 +121,7 @@ class Environment:
             return np.concatenate((self.sim.data.qpos, self.sim.data.qvel))
 
     # Reset simulation to state within initial state specified by user
-    def reset_sim(self, next_goal = None):
+    def reset_sim(self, next_goal):
 
         # Reset controls
         self.sim.data.ctrl[:] = 0
@@ -221,7 +221,7 @@ class Environment:
             assert False, "Provide display end goal function in environment.py file"
 
     #Function returns an end goal
-    def get_next_goal(self, test):
+    def get_next_goal(self):
 
         end_goal = np.zeros((len(self.goal_space_test)))
 
@@ -267,9 +267,9 @@ class Environment:
 
 
 
-        elif not test and self.goal_space_train is not None:
-            for i in range(len(self.goal_space_train)):
-                end_goal[i] = np.random.uniform(self.goal_space_train[i][0],self.goal_space_train[i][1])
+        # elif not test and self.goal_space_train is not None:
+        #     for i in range(len(self.goal_space_train)):
+        #         end_goal[i] = np.random.uniform(self.goal_space_train[i][0],self.goal_space_train[i][1])
         else:
             assert self.goal_space_test is not None, "Need goal space for testing. Set goal_space_test variable in \"design_env.py\" file"
 

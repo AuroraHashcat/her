@@ -9,7 +9,7 @@ class replay_buffer:
     def __init__(self, env_params, buffer_size, sample_func, gy, her):
         self.env_params = env_params
         self.T = env_params['max_timesteps']
-        self.size = buffer_size // self.T
+        self.size = buffer_size // self.T   #10000/8 = 1250 episodes
         self.gy = gy
         self.her = her
         # memory management
@@ -30,7 +30,7 @@ class replay_buffer:
         mb_obs, mb_ag, mb_g, mb_actions = episode_batch
         batch_size = mb_obs.shape[0]
         with self.lock:
-            idxs = self._get_storage_idx(inc=batch_size)
+            idxs = self._get_storage_idx(inc=batch_size) #inc = batch_size = 1,
             # store the informations
             self.buffers['obs'][idxs] = mb_obs
             self.buffers['ag'][idxs] = mb_ag
@@ -38,6 +38,8 @@ class replay_buffer:
             self.buffers['actions'][idxs] = mb_actions
             self.n_transitions_stored += self.T * batch_size
     
+
+
     # sample the data from the replay buffer
     def sample(self, batch_size):
         temp_buffers = {}

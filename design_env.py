@@ -89,12 +89,12 @@ def design_env():
             [-max_velo, max_velo]])
 
     # Provide state to subgoal projection function.
-    # a = np.concatenate((sim.data.qpos[:2], np.array([4 if sim.data.qvel[i] > 4 else -4 if sim.data.qvel[i] < -4 else sim.data.qvel[i] for i in range(3)])))
-    project_state_to_subgoal = lambda sim: np.concatenate((sim.data.qpos[:2], np.array(
-        [1 if sim.data.qpos[2] > 1 else sim.data.qpos[2]]), np.array(
-        [3 if sim.data.qvel[i] > 3 else -3 if sim.data.qvel[i] < -3 else sim.data.qvel[i] for i in range(2)])))
+    #a = np.concatenate((sim.data.qpos[:2], np.array([4 if sim.data.qvel[i] > 4 else -4 if sim.data.qvel[i] < -4 else sim.data.qvel[i] for i in range(3)])))
+    # project_state_to_subgoal = lambda sim: np.concatenate((sim.data.qpos[:2], np.array(
+    #     [1 if sim.data.qpos[2] > 1 else sim.data.qpos[2]]), np.array(
+    #     [3 if sim.data.qvel[i] > 3 else -3 if sim.data.qvel[i] < -3 else sim.data.qvel[i] for i in range(2)])))
 
-    # Set subgoal achievement thresholds
+    #Set subgoal achievement thresholds
     velo_threshold = 0.5
     quat_threshold = 0.5
     # subgoal_thresholds = np.array([len_threshold, len_threshold, height_threshold, quat_threshold, quat_threshold, quat_threshold, quat_threshold, velo_threshold, velo_threshold, velo_threshold])
@@ -106,7 +106,7 @@ def design_env():
 
     # Instantiate and return agent and environment
     env = Environment(model_name, goal_space_train, goal_space_test, project_state_to_end_goal, end_goal_thresholds,
-                        initial_state_space, subgoal_bounds, project_state_to_subgoal, subgoal_thresholds, max_actions,
+                        initial_state_space, subgoal_bounds,  subgoal_thresholds, max_actions,
                         timesteps_per_action, False)
 
     return env
