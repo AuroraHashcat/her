@@ -8,7 +8,7 @@ import gym
 
 class Environment:
 
-    def __init__(self, model_name, goal_space_train, goal_space_test, project_state_to_end_goal, end_goal_thresholds, initial_state_space, subgoal_bounds, subgoal_thresholds, max_actions = 1200, num_frames_skip = 10, show = False):
+    def __init__(self, model_name, goal_space_train, goal_space_test, project_state_to_end_goal, end_goal_thresholds, initial_state_space,  max_actions = 1200, num_frames_skip = 10, show = False):
 
         self.name = model_name
 
@@ -29,63 +29,40 @@ class Environment:
         self.action_space = gym.spaces.Box(low=self.action_bounds_low, high=self.action_bounds_high, shape=(self.action_dim,), dtype=np.float32)
         #self.action_offset = np.zeros((len(self.action_bounds))) # Assumes symmetric low-level action ranges
 
-        #self.subgoal_dim = len(subgoal_bounds)
-        #self.subgoal_bounds = subgoal_bounds
-
         # Projection functions
         self.project_state_to_end_goal = project_state_to_end_goal
-        #self.project_state_to_subgoal = project_state_to_subgoal
-
-        # Convert subgoal bounds to symmetric bounds and offset.  Need these to properly configure subgoal actor networks
-        #self.subgoal_bounds_symmetric = np.zeros((len(self.subgoal_bounds)))
-        #self.subgoal_bounds_offset = np.zeros((len(self.subgoal_bounds)))
-
-        #for i in range(len(self.subgoal_bounds)):
-        #    self.subgoal_bounds_symmetric[i] = (self.subgoal_bounds[i][1] - self.subgoal_bounds[i][0])/2
-        #    self.subgoal_bounds_offset[i] = self.subgoal_bounds[i][1] - self.subgoal_bounds_symmetric[i]
 
 
         # End goal/subgoal thresholds
         self.end_goal_thresholds = end_goal_thresholds
-        #self.subgoal_thresholds = subgoal_thresholds
 
         # Set inital state and goal state spaces
         self.initial_state_space = initial_state_space
         self.goal_space_train = goal_space_train
         self.goal_space_test = goal_space_test
-        #self.subgoal_colors = ["Magenta","Green","Red","Blue","Cyan","Orange","Maroon","Gray","White","Black"]
 
         self.max_actions = max_actions
 
         # Implement visualization if necessary
-        self.visualize = False  # Visualization boolean
+        self.visualize = show  # Visualization boolean
         if self.visualize:
             self.viewer = MjViewer(self.sim)
         self.num_frames_skip = num_frames_skip
 
 
     def sparse_reward(self, states, end_goals):
-        """
-        计算批量奖励函数。
-        
-        参数:
-            states: np.ndarray，形状为 (N, D)，表示多个 achieved goals。
-            end_goals: np.ndarray，形状为 (N, D)，表示多个 desired goals。
-            
-        返回:
-            np.ndarray，形状为 (N,)，每个 achieved goal 与对应的 desired goal 的奖励值。
-        """
+
         rewards = np.zeros(states.shape[0])  # 初始化奖励数组
-        project_state_to_end_goal = lambda state: state[:3]
+        # project_state_to_end_goal = self.project_state_to_end_goal
 
         for i in range(states.shape[0]):  # 遍历每对 (state, end_goal)
             state = states[i]
             end_goal = end_goals[i]
             goal_achieved = True
 
-            proj_end_goal = project_state_to_end_goal(state)
+            # proj_end_goal = project_state_to_end_goal(self.sim,state)
             for j in range(len(state)):  # 检查每个维度是否满足阈值
-                if np.abs(end_goal[j] - proj_end_goal[j]) > self.end_goal_thresholds[j]:
+                if np.abs(end_goal[j] - state[j]) > self.end_goal_thresholds[j]:
                     goal_achieved = False
                     break
 
@@ -100,8 +77,8 @@ class Environment:
     def success(self, state, end_goal):
         goal_achieved = 1
 
-        project_state_to_end_goal = lambda state: state[:3]
-        proj_end_goal = project_state_to_end_goal(state)
+        project_state_to_end_goal = self.project_state_to_end_goal
+        proj_end_goal = project_state_to_end_goal(self.sim,state)
 
         for j in range(len(proj_end_goal)):
             if (np.absolute(end_goal[j] - proj_end_goal[j]) > self.end_goal_thresholds[j]):
@@ -167,58 +144,58 @@ class Environment:
 
 
     # Visualize end goal.  This function may need to be adjusted for new environments.
-    def display_end_goal(self,end_goal):
+    # def display_end_goal(self,end_goal):
 
-        # Goal can be visualized by changing the location of the relevant site object.
-        if self.name == "pendulum.xml":
-            self.sim.data.mocap_pos[0] = np.array([0.5*np.sin(end_goal[0]),0,0.5*np.cos(end_goal[0])+0.6])
-        elif self.name == "ur5.xml":
+    #     # Goal can be visualized by changing the location of the relevant site object.
+    #     if self.name == "pendulum.xml":
+    #         self.sim.data.mocap_pos[0] = np.array([0.5*np.sin(end_goal[0]),0,0.5*np.cos(end_goal[0])+0.6])
+    #     elif self.name == "ur5.xml":
 
-            theta_1 = end_goal[0]
-            theta_2 = end_goal[1]
-            theta_3 = end_goal[2]
+    #         theta_1 = end_goal[0]
+    #         theta_2 = end_goal[1]
+    #         theta_3 = end_goal[2]
 
-            # shoulder_pos_1 = np.array([0,0,0,1])
-            upper_arm_pos_2 = np.array([0,0.13585,0,1])
-            forearm_pos_3 = np.array([0.425,0,0,1])
-            wrist_1_pos_4 = np.array([0.39225,-0.1197,0,1])
+    #         # shoulder_pos_1 = np.array([0,0,0,1])
+    #         upper_arm_pos_2 = np.array([0,0.13585,0,1])
+    #         forearm_pos_3 = np.array([0.425,0,0,1])
+    #         wrist_1_pos_4 = np.array([0.39225,-0.1197,0,1])
 
 
-            # Transformation matrix from shoulder to base reference frame
-            T_1_0 = np.array([[1,0,0,0],[0,1,0,0],[0,0,1,0.089159],[0,0,0,1]])
+    #         # Transformation matrix from shoulder to base reference frame
+    #         T_1_0 = np.array([[1,0,0,0],[0,1,0,0],[0,0,1,0.089159],[0,0,0,1]])
 
-            # Transformation matrix from upper arm to shoulder reference frame
-            T_2_1 = np.array([[np.cos(theta_1), -np.sin(theta_1), 0, 0],[np.sin(theta_1), np.cos(theta_1), 0, 0],[0,0,1,0],[0,0,0,1]])
+    #         # Transformation matrix from upper arm to shoulder reference frame
+    #         T_2_1 = np.array([[np.cos(theta_1), -np.sin(theta_1), 0, 0],[np.sin(theta_1), np.cos(theta_1), 0, 0],[0,0,1,0],[0,0,0,1]])
 
-            # Transformation matrix from forearm to upper arm reference frame
-            T_3_2 = np.array([[np.cos(theta_2),0,np.sin(theta_2),0],[0,1,0,0.13585],[-np.sin(theta_2),0,np.cos(theta_2),0],[0,0,0,1]])
+    #         # Transformation matrix from forearm to upper arm reference frame
+    #         T_3_2 = np.array([[np.cos(theta_2),0,np.sin(theta_2),0],[0,1,0,0.13585],[-np.sin(theta_2),0,np.cos(theta_2),0],[0,0,0,1]])
 
-            # Transformation matrix from wrist 1 to forearm reference frame
-            T_4_3 = np.array([[np.cos(theta_3),0,np.sin(theta_3),0.425],[0,1,0,0],[-np.sin(theta_3),0,np.cos(theta_3),0],[0,0,0,1]])
+    #         # Transformation matrix from wrist 1 to forearm reference frame
+    #         T_4_3 = np.array([[np.cos(theta_3),0,np.sin(theta_3),0.425],[0,1,0,0],[-np.sin(theta_3),0,np.cos(theta_3),0],[0,0,0,1]])
 
-            # Determine joint position relative to original reference frame
-            # shoulder_pos = T_1_0.dot(shoulder_pos_1)
-            upper_arm_pos = T_1_0.dot(T_2_1).dot(upper_arm_pos_2)[:3]
-            forearm_pos = T_1_0.dot(T_2_1).dot(T_3_2).dot(forearm_pos_3)[:3]
-            wrist_1_pos = T_1_0.dot(T_2_1).dot(T_3_2).dot(T_4_3).dot(wrist_1_pos_4)[:3]
+    #         # Determine joint position relative to original reference frame
+    #         # shoulder_pos = T_1_0.dot(shoulder_pos_1)
+    #         upper_arm_pos = T_1_0.dot(T_2_1).dot(upper_arm_pos_2)[:3]
+    #         forearm_pos = T_1_0.dot(T_2_1).dot(T_3_2).dot(forearm_pos_3)[:3]
+    #         wrist_1_pos = T_1_0.dot(T_2_1).dot(T_3_2).dot(T_4_3).dot(wrist_1_pos_4)[:3]
 
-            joint_pos = [upper_arm_pos, forearm_pos, wrist_1_pos]
+    #         joint_pos = [upper_arm_pos, forearm_pos, wrist_1_pos]
 
-            """
-            print("\nEnd Goal Joint Pos: ")
-            print("Upper Arm Pos: ", joint_pos[0])
-            print("Forearm Pos: ", joint_pos[1])
-            print("Wrist Pos: ", joint_pos[2])
-            """
+    #         """
+    #         print("\nEnd Goal Joint Pos: ")
+    #         print("Upper Arm Pos: ", joint_pos[0])
+    #         print("Forearm Pos: ", joint_pos[1])
+    #         print("Wrist Pos: ", joint_pos[2])
+    #         """
 
-            for i in range(3):
-                self.sim.data.mocap_pos[i] = joint_pos[i]
+    #         for i in range(3):
+    #             self.sim.data.mocap_pos[i] = joint_pos[i]
 
-        elif self.name == "ant_reacher.xml":
-            self.sim.data.mocap_pos[0][:2] = np.copy(end_goal[:2])
+    #     elif self.name == "ant_reacher.xml":
+    #         self.sim.data.mocap_pos[0][:2] = np.copy(end_goal[:2])
 
-        else:
-            assert False, "Provide display end goal function in environment.py file"
+    #     else:
+    #         assert False, "Provide display end goal function in environment.py file"
 
     #Function returns an end goal
     def get_next_goal(self):

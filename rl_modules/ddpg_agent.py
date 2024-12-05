@@ -16,12 +16,13 @@ ddpg with HER (MPI-version)
 """
 
 class ddpg_agent:
-    def __init__(self, args, env, env_params,gy, her):
+    def __init__(self, args, env, env_params,gy, her,test):
         self.args = args
         self.env = env
         self.env_params = env_params
         self.gy = gy
         self.her = her
+        self.test = test
         # create the network
         self.actor_network = actor(env_params)
         self.critic_network = critic(env_params)
@@ -64,6 +65,20 @@ class ddpg_agent:
             if not os.path.exists(self.model_path):
                 os.mkdir(self.model_path)
 
+        if (self.test):
+            saved_data = torch.load('/home/wuchenxi/projects/hindsight-experience-replay/saved_models/AntReacher/model2.pt')
+            o_mean, o_std, g_mean, g_std, actor_state_dict = saved_data
+
+            # 恢复模型的标准化参数
+            self.o_norm.mean = o_mean
+            self.o_norm.std = o_std
+            self.g_norm.mean = g_mean
+            self.g_norm.std = g_std
+
+            # 恢复 actor 网络的状态字典
+            self.actor_network.load_state_dict(actor_state_dict)
+
+
 
 
     def learn(self,log):
@@ -73,83 +88,84 @@ class ddpg_agent:
         """
         # start to collect samples
         for epoch in range(self.args.n_epochs):    #1000
-            for _ in range(self.args.n_cycles):      #100    episode
-                mb_obs, mb_ag, mb_g, mb_actions = [], [], [], []
-                for _ in range(self.args.num_rollouts_per_mpi):  #1
-                    # reset the rollouts
-                    ep_obs, ep_ag, ep_g, ep_actions = [], [], [], []
-                    # reset the environment
-                    if (self.gy == True):
-                        observation = self.env.reset()
-                        obs = observation['observation']
-                        ag = observation['achieved_goal']
-                        g = observation['desired_goal']
-                        # start to collect samples
-                        for t in range(self.env_params['max_timesteps']):    #800
-                            with torch.no_grad():
-                                input_tensor = self._preproc_inputs(obs, g)
-                                pi = self.actor_network(input_tensor)
-                                action = self._select_actions(pi)
-                            # feed the actions into the environment
-                            observation_new, _, _, info = self.env.step(action)
-                            obs_new = observation_new['observation']
-                            ag_new = observation_new['achieved_goal']
+            if (self.test == False):
+                for _ in range(self.args.n_cycles):      #100    episode
+                    mb_obs, mb_ag, mb_g, mb_actions = [], [], [], []
+                    for _ in range(self.args.num_rollouts_per_mpi):  #1
+                        # reset the rollouts
+                        ep_obs, ep_ag, ep_g, ep_actions = [], [], [], []
+                        # reset the environment
+                        if (self.gy == True):
+                            observation = self.env.reset()
+                            obs = observation['observation']
+                            ag = observation['achieved_goal']
+                            g = observation['desired_goal']
+                            # start to collect samples
+                            for t in range(self.env_params['max_timesteps']):    #800
+                                with torch.no_grad():
+                                    input_tensor = self._preproc_inputs(obs, g)
+                                    pi = self.actor_network(input_tensor)
+                                    action = self._select_actions(pi)
+                                # feed the actions into the environment
+                                observation_new, _, _, info = self.env.step(action)
+                                obs_new = observation_new['observation']
+                                ag_new = observation_new['achieved_goal']
+                                ep_obs.append(obs.copy())
+                                ep_ag.append(ag.copy())
+                                ep_g.append(g.copy())
+                                ep_actions.append(action.copy())
+                                # re-assign the observation
+                                obs = obs_new
+                                ag = ag_new
+
                             ep_obs.append(obs.copy())
                             ep_ag.append(ag.copy())
-                            ep_g.append(g.copy())
-                            ep_actions.append(action.copy())
-                    # re-assign the observation
-                            obs = obs_new
-                            ag = ag_new
-
-                        ep_obs.append(obs.copy())
-                        ep_ag.append(ag.copy())
-                    else:
-                        g = self.env.get_next_goal()
-                        obs = self.env.reset_sim(g)
-                        ag = obs[:3]
-                        for t in range(self.env_params['max_timesteps']):
-                            action = self.env.action_space.sample()
-                            obs_new = self.env.execute_action(action)
-                            ag_new = obs_new[:3]
+                        else:
+                            g = self.env.get_next_goal()
+                            obs = self.env.reset_sim(g)
+                            ag = self.env.project_state_to_end_goal(self.env.sim,obs)    #antreacher/ur5 :3    pendulum2
+                            for t in range(self.env_params['max_timesteps']):
+                                action = self.env.action_space.sample()
+                                obs_new = self.env.execute_action(action)
+                                ag_new = self.env.project_state_to_end_goal(self.env.sim,obs_new)   #antreacher/ur5: 3   pendulum2
+                                ep_obs.append(obs.copy())
+                                ep_ag.append(ag.copy())
+                                ep_g.append(g.copy())
+                                ep_actions.append(action.copy())
+                                # re-assign the observation
+                                obs = obs_new
+                                ag = ag_new
                             ep_obs.append(obs.copy())
                             ep_ag.append(ag.copy())
-                            ep_g.append(g.copy())
-                            ep_actions.append(action.copy())
-                    # re-assign the observation
-                            obs = obs_new
-                            ag = ag_new
-                        ep_obs.append(obs.copy())
-                        ep_ag.append(ag.copy())
 
-                    mb_obs.append(ep_obs)
-                    mb_ag.append(ep_ag)
-                    mb_g.append(ep_g)
-                    mb_actions.append(ep_actions)
-                # convert them into arrays
-                mb_obs = np.array(mb_obs)
-                mb_ag = np.array(mb_ag)
-                mb_g = np.array(mb_g)
-                mb_actions = np.array(mb_actions)
-                # store the episodes
-                self.buffer.store_episode([mb_obs, mb_ag, mb_g, mb_actions])
-                #relabel
-                self._update_normalizer([mb_obs, mb_ag, mb_g, mb_actions])
-                for _ in range(self.args.n_batches):
-                    # train the network
-                    self._update_network()
-                # soft update
-                self._soft_update_target_network(self.actor_target_network, self.actor_network)
-                self._soft_update_target_network(self.critic_target_network, self.critic_network)
-            # start to do the evaluation
+                        mb_obs.append(ep_obs)
+                        mb_ag.append(ep_ag)
+                        mb_g.append(ep_g)
+                        mb_actions.append(ep_actions)
+                    # convert them into arrays
+                    mb_obs = np.array(mb_obs)
+                    mb_ag = np.array(mb_ag)
+                    mb_g = np.array(mb_g)
+                    mb_actions = np.array(mb_actions)
+                    # store the episodes
+                    self.buffer.store_episode([mb_obs, mb_ag, mb_g, mb_actions])
+                    #relabel
+                    self._update_normalizer([mb_obs, mb_ag, mb_g, mb_actions])
+                    for _ in range(self.args.n_batches):
+                        # train the network
+                        self._update_network()
+                    # soft update
+                    self._soft_update_target_network(self.actor_target_network, self.actor_network)
+                    self._soft_update_target_network(self.critic_target_network, self.critic_network)
+        # start to do the evaluation
             success_rate = self._eval_agent()
             if (log == True):
-                wandb.log({"FetchPickAndPlace/success rate": success_rate})
+                wandb.log({"AntReacher/success rate": success_rate})
             
             if MPI.COMM_WORLD.Get_rank() == 0:
                 print('[{}] epoch is: {}, eval success rate is: {:.3f}'.format(datetime.now(), epoch, success_rate))
-                torch.save([self.o_norm.mean, self.o_norm.std, self.g_norm.mean, self.g_norm.std, self.actor_network.state_dict()], \
-                            self.model_path + '/model.pt')
+            torch.save([self.o_norm.mean, self.o_norm.std, self.g_norm.mean, self.g_norm.std, self.actor_network.state_dict()], \
+                        self.model_path + '/model1.pt')
 
     # pre_process the inputs
     def _preproc_inputs(self, obs, g):

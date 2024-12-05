@@ -1,8 +1,24 @@
-from mujoco_py import load_model_from_path, MjSim
+# import gym
+# import os
+# os.environ["MUJOCO_GL"] = "offscreen"
 
-model = load_model_from_path("/home/wuchenxi/project/mujoco_files/ant_reacher.xml")  # 加载 Ant Reacher 模型
-sim = MjSim(model)
+# env = gym.make("Pendulum-v0")
+# obs = env.reset()
+# done = False
+# while (not done):
+#     action = env.action_space.sample()
+#     obs, reward, done, info = env.step(action)
+#     env.render()  # 渲染当前环境状态
 
-# 获取 action 维度
-action_dim = len(sim.model.actuator_ctrlrange)
-print(f"Action Dimension: {action_dim}")  # 输出：8
+from pyvirtualdisplay import Display
+import gym
+
+# 启动虚拟显示
+display = Display(visible=0, size=(1400, 900))
+display.start()
+
+# 创建环境
+env = gym.make('Pendulum-v1')
+
+# 渲染环境
+env.render()

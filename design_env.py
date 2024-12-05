@@ -4,109 +4,105 @@ This file provides the template for designing the agent and environment.  The be
 
 import numpy as np
 from environment import Environment
-#import gymnasium as gym
-
-# from utils import check_validity
+import gym
 
 
-def design_env():
+
+def design_env(model_name):
 
 
-    #Mujoco
-    model_name = "ant_reacher.xml"
-    #model_name = 'ur5.xml'
+    #model_name
+    #model_name = "ant_reacher.xml"
+    model_name = model_name + ".xml"
     #model_name = 'pendulum.xml'
 
 
-    max_actions = 800
+    
+    if (model_name == "ant_reacher.xml"):
+        #max_actions and timesteps_per_action
+        max_actions = 800
+        timesteps_per_action = 15 
 
-    timesteps_per_action = 15  # Provide the number of time steps per atomic action.
+        #initial_state_space
+        initial_joint_pos = np.array([0, 0, 0.55, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, 0.0, -1.0, 0.0, 1.0])
+        initial_joint_pos = np.reshape(initial_joint_pos, (len(initial_joint_pos), 1))
+        initial_joint_ranges = np.concatenate((initial_joint_pos, initial_joint_pos), 1)
+        initial_joint_ranges[0] = np.array([-9.5, 9.5])
+        initial_joint_ranges[1] = np.array([-9.5, 9.5])
+        initial_state_space = np.concatenate((initial_joint_ranges, np.zeros((len(initial_joint_ranges) - 1, 2))), 0)
 
-    """
-    2. DESIGN ENVIRONMENT
+        #goal_space_train and goal_space_test
+        max_range = 9.5
+        goal_space_train = [[-max_range, max_range], [-max_range, max_range], [0.45, 0.55]]
+        goal_space_test = [[-max_range, max_range], [-max_range, max_range], [0.45, 0.55]]
 
-        a. Designer must provide the original UMDP (S,A,T,G,R).
-            - The S,A,T components can be fulfilled by providing the Mujoco model.
-            - The user must separately specifiy the initial state space.
-            - G can be provided by specifying the end goal space.
-            - R, which by default uses a shortest path {-1,0} reward function, can be implemented by specifying two components: (i) a function that maps the state space to the end goal space and (ii) the end goal achievement thresholds for each dimensions of the end goal.
+        #state->end_goal
+        project_state_to_end_goal = lambda state: state[:3]
 
-        b.  In order to convert the original UMDP into a hierarchy of k UMDPs, the designer must also provide
-            - The subgoal action space, A_i, for all higher-level UMDPs i > 0
-            - R_i for levels 0 <= i < k-1 (i.e., all levels that try to achieve goals in the subgoal space).  As in the original UMDP, R_i can be implemented by providing two components:(i) a function that maps the state space to the subgoal space and (ii) the subgoal achievement thresholds.
+        #end_goal_thresholds
+        len_threshold = 0.5
+        height_threshold = 0.2
+        end_goal_thresholds = np.array([len_threshold, len_threshold, height_threshold])
 
-        c.  Designer should also provide subgoal and end goal visualization functions in order to show video of training.  These can be updated in "display_subgoal" and "display_end_goal" methods in the "environment.py" file.
+        # Instantiate and return agent and environment
+        
 
-    """
+    elif (model_name == "pendulum.xml"):
+        #max_actions and timesteps_per_action
+        max_actions = 500
+        timesteps_per_action = 10
+
+        #initial state_space
+        initial_state_space = np.array([[np.pi/4, 7*np.pi/4],[-0.05,0.05]])
+
+        #goal_space_train and goal_space_test
+        goal_space_train = [[np.deg2rad(-16),np.deg2rad(16)],[-0.6,0.6]]
+        goal_space_test = [[0,0],[0,0]]
+
+        #state->end_goal
+        def bound_angle(angle):
+            bounded_angle = angle % (2*np.pi)
+            if np.absolute(bounded_angle) > np.pi:
+                bounded_angle = -(np.pi - bounded_angle % np.pi)
+            return bounded_angle
+        project_state_to_end_goal = lambda sim, state: np.array([bound_angle(sim.data.qpos[0]), 15 if state[2] > 15 else -15 if state[2] < -15 else state[2]])
+
+        #end_goal_thresholds
+        end_goal_thresholds = np.array([np.deg2rad(9.5), 0.6])
+
+       
+
+    else:
+        #max_actions and timesteps_per_action
+        max_actions = 600
+        timesteps_per_action = 15 
+
+        #initial_state_space
+        initial_joint_pos = np.array([  5.96625837e-03,   3.22757851e-03,  -1.27944547e-01])
+        initial_joint_pos = np.reshape(initial_joint_pos,(len(initial_joint_pos),1))
+        initial_joint_ranges = np.concatenate((initial_joint_pos,initial_joint_pos),1)
+        initial_joint_ranges[0] = np.array([-np.pi/8,np.pi/8])
+        # initial_joint_ranges[1] = np.array([-np.pi/4,0])
+        initial_state_space = np.concatenate((initial_joint_ranges,np.zeros((len(initial_joint_ranges),2))),0)
+
+        #goal_space_train and goal_space_test
+        goal_space_train = [[-np.pi,np.pi],[-np.pi/4,0],[-np.pi/4,np.pi/4]]
+        goal_space_test = [[-np.pi,np.pi],[-np.pi/4,0],[-np.pi/4,np.pi/4]]
+
+        #state->end_goal
+        def bound_angle(angle):
+            bounded_angle = np.absolute(angle) % (2*np.pi)
+            if angle < 0:
+                bounded_angle = -bounded_angle
+            return bounded_angle
+        project_state_to_end_goal = lambda sim, state: np.array([bound_angle(sim.data.qpos[i]) for i in range(len(sim.data.qpos))])
+
+        #end_goal_thresholds
+        angle_threshold = np.deg2rad(10)
+        end_goal_thresholds = np.array([angle_threshold, angle_threshold, angle_threshold])
 
 
+    env = Environment(model_name, goal_space_train, goal_space_test, project_state_to_end_goal, end_goal_thresholds, 
+    initial_state_space, max_actions, timesteps_per_action, False)
 
-
-    # Provide initial state space consisting of the ranges for all joint angles and velocities.
-    # In the Ant Reacher task, we use a random initial torso position and use fixed values for the remainder.
-
-    initial_joint_pos = np.array([0, 0, 0.55, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, 0.0, -1.0, 0.0, 1.0])
-    initial_joint_pos = np.reshape(initial_joint_pos, (len(initial_joint_pos), 1))
-    initial_joint_ranges = np.concatenate((initial_joint_pos, initial_joint_pos), 1)
-    initial_joint_ranges[0] = np.array([-9.5, 9.5])
-    initial_joint_ranges[1] = np.array([-9.5, 9.5])
-
-    # Cocatenate velocity ranges
-    initial_state_space = np.concatenate((initial_joint_ranges, np.zeros((len(initial_joint_ranges) - 1, 2))), 0)
-
-    # Provide end goal space.  The code supports two types of end goal spaces if user would like to train on a larger
-    # end goal space.  If user needs to make additional customizations to the end goals, the "get_next_goal" method
-    # in "environment.py" can be updated.
-
-    # In the UR5 reacher environment, the end goal will be the desired joint positions for the 3 main joints.
-    max_range = 9.5
-    goal_space_train = [[-max_range, max_range], [-max_range, max_range], [0.45, 0.55]]
-    goal_space_test = [[-max_range, max_range], [-max_range, max_range], [0.45, 0.55]]
-
-    # Provide a function that maps from the state space to the end goal space.  This is used to (i) determine whether
-    # the agent should be given the sparse reward and (ii) for Hindsight Experience Replay to determine which end
-    # goal was achieved after a sequence of actions.
-    project_state_to_end_goal = lambda state: state[:3]
-
-    # Set end goal achievement thresholds.  If the agent is within the threshold for each dimension, the end goal has
-    # been achieved and the reward of 0 is granted.
-
-    # For the Ant Reacher task, the end goal will be the desired (x,y) position of the torso
-    len_threshold = 0.5
-    height_threshold = 0.2
-    end_goal_thresholds = np.array([len_threshold, len_threshold, height_threshold])
-
-    # Provide range for each dimension of subgoal space in order to configure subgoal actor networks.  Subgoal space
-    # can be the same as the state space or some other projection out of the state space.
-
-    # The subgoal space in the Ant Reacher task is the desired (x,y,z) position and (x,y,z) translational velocity of
-    # the torso
-    cage_max_dim = 11.75
-    max_height = 1
-    max_velo = 3
-    subgoal_bounds = np.array(
-        [[-cage_max_dim, cage_max_dim], [-cage_max_dim, cage_max_dim], [0, max_height], [-max_velo, max_velo],
-            [-max_velo, max_velo]])
-
-    # Provide state to subgoal projection function.
-    #a = np.concatenate((sim.data.qpos[:2], np.array([4 if sim.data.qvel[i] > 4 else -4 if sim.data.qvel[i] < -4 else sim.data.qvel[i] for i in range(3)])))
-    # project_state_to_subgoal = lambda sim: np.concatenate((sim.data.qpos[:2], np.array(
-    #     [1 if sim.data.qpos[2] > 1 else sim.data.qpos[2]]), np.array(
-    #     [3 if sim.data.qvel[i] > 3 else -3 if sim.data.qvel[i] < -3 else sim.data.qvel[i] for i in range(2)])))
-
-    #Set subgoal achievement thresholds
-    velo_threshold = 0.5
-    quat_threshold = 0.5
-    # subgoal_thresholds = np.array([len_threshold, len_threshold, height_threshold, quat_threshold, quat_threshold, quat_threshold, quat_threshold, velo_threshold, velo_threshold, velo_threshold])
-    subgoal_thresholds = np.array([len_threshold, len_threshold, height_threshold, velo_threshold, velo_threshold])
-
-    # Ensure environment customization have been properly entered
-    # check_validity(model_name, goal_space_train, goal_space_test, end_goal_thresholds, initial_state_space,
-    #                subgoal_bounds, subgoal_thresholds, max_actions, timesteps_per_action)
-
-    # Instantiate and return agent and environment
-    env = Environment(model_name, goal_space_train, goal_space_test, project_state_to_end_goal, end_goal_thresholds,
-                        initial_state_space, subgoal_bounds,  subgoal_thresholds, max_actions,
-                        timesteps_per_action, False)
-
-    return env
+    return  env

@@ -19,18 +19,21 @@ train the agent, the MPI part code is copy from openai baselines(https://github.
 # gy = True: gym environment, False:AntReacher
 # log = True: wandb
 # her = True: HER Strategy   False: DDPG
-# PS: wandb记录的表名需要手动改。在wandb.init和ddpg_agent.py里。
+#test = True: 评估模型，不训练
+#arguments
+# PS: wandb记录的表名需要手动改。在wandb.init和ddpg_agent.py里。savemodel
 import design_env
 gy = False
 log = False
 her = True
+test = False
 
 if(log == True):
     import wandb
     os.environ["WANDB_API_KEY"] = "7345a4ba788b2d78ab6a78d185784b2ea818317e"
     wandb.login()
     wandb.init(
-        project="GCRLbaselines", name="HER_FetchPickAndPlace_seed1",group="HER_FetchPickAndPlace"
+        project="GCRLbaselines", name="HER_AntReacher_seed1",group="HER_AntReacher"
     )
     os.environ["WANDB_MODE"] = "offline"
 
@@ -59,7 +62,7 @@ def launch(args):
         # get the environment parameters
         env_params = get_env_params(env)
     else:
-        env = design_env.design_env()
+        env = design_env.design_env(args.env_name)
         end_goal = env.get_next_goal()
         observation = env.reset_sim(end_goal)
 
@@ -69,7 +72,7 @@ def launch(args):
                     'action_max':env.action_bounds_high,
                     'max_timesteps':env.max_actions}
     # create the ddpg agent to interact with the environment 
-    ddpg_trainer = ddpg_agent(args, env, env_params, gy, her)
+    ddpg_trainer = ddpg_agent(args, env, env_params, gy, her,test)
     ddpg_trainer.learn(log)
 
 if __name__ == '__main__':
