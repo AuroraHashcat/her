@@ -8,7 +8,7 @@ import gym
 
 
 
-def design_env(model_name):
+def design_env(model_name,show):
 
 
     #model_name
@@ -37,7 +37,7 @@ def design_env(model_name):
         goal_space_test = [[-max_range, max_range], [-max_range, max_range], [0.45, 0.55]]
 
         #state->end_goal
-        project_state_to_end_goal = lambda state: state[:3]
+        project_state_to_end_goal = lambda sim, state: state[:3]
 
         #end_goal_thresholds
         len_threshold = 0.5
@@ -49,10 +49,10 @@ def design_env(model_name):
 
     elif (model_name == "pendulum.xml"):
         #max_actions and timesteps_per_action
-        max_actions = 500
+        max_actions = 1000
         timesteps_per_action = 10
 
-        #initial state_space
+        #initial_state_space
         initial_state_space = np.array([[np.pi/4, 7*np.pi/4],[-0.05,0.05]])
 
         #goal_space_train and goal_space_test
@@ -69,7 +69,6 @@ def design_env(model_name):
 
         #end_goal_thresholds
         end_goal_thresholds = np.array([np.deg2rad(9.5), 0.6])
-
        
 
     else:
@@ -103,6 +102,6 @@ def design_env(model_name):
 
 
     env = Environment(model_name, goal_space_train, goal_space_test, project_state_to_end_goal, end_goal_thresholds, 
-    initial_state_space, max_actions, timesteps_per_action, False)
+    initial_state_space, max_actions, timesteps_per_action, show)
 
     return  env

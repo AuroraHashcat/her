@@ -69,23 +69,17 @@ class ddpg_agent:
             saved_data = torch.load('/home/wuchenxi/projects/hindsight-experience-replay/saved_models/AntReacher/model2.pt')
             o_mean, o_std, g_mean, g_std, actor_state_dict = saved_data
 
-            # 恢复模型的标准化参数
             self.o_norm.mean = o_mean
             self.o_norm.std = o_std
             self.g_norm.mean = g_mean
             self.g_norm.std = g_std
 
-            # 恢复 actor 网络的状态字典
             self.actor_network.load_state_dict(actor_state_dict)
 
 
 
 
-    def learn(self,log):
-        """
-        train the network
-
-        """
+    def learn(self,log,show):
         # start to collect samples
         for epoch in range(self.args.n_epochs):    #1000
             if (self.test == False):
@@ -121,13 +115,14 @@ class ddpg_agent:
                             ep_obs.append(obs.copy())
                             ep_ag.append(ag.copy())
                         else:
-                            g = self.env.get_next_goal()
+                            g = self.env.get_next_goal(self.test)
                             obs = self.env.reset_sim(g)
-                            ag = self.env.project_state_to_end_goal(self.env.sim,obs)    #antreacher/ur5 :3    pendulum2
+                            ag = self.env.project_state_to_end_goal(self.env.sim,obs)    
                             for t in range(self.env_params['max_timesteps']):
                                 action = self.env.action_space.sample()
                                 obs_new = self.env.execute_action(action)
-                                ag_new = self.env.project_state_to_end_goal(self.env.sim,obs_new)   #antreacher/ur5: 3   pendulum2
+                                ag_new = self.env.project_state_to_end_goal(self.env.sim,obs_new)
+                                
                                 ep_obs.append(obs.copy())
                                 ep_ag.append(ag.copy())
                                 ep_g.append(g.copy())
@@ -157,14 +152,15 @@ class ddpg_agent:
                     # soft update
                     self._soft_update_target_network(self.actor_target_network, self.actor_network)
                     self._soft_update_target_network(self.critic_target_network, self.critic_network)
-        # start to do the evaluation
-            success_rate = self._eval_agent()
+            # start to do the evaluation
+            success_rate = self._eval_agent(show)
             if (log == True):
                 wandb.log({"AntReacher/success rate": success_rate})
             
             if MPI.COMM_WORLD.Get_rank() == 0:
                 print('[{}] epoch is: {}, eval success rate is: {:.3f}'.format(datetime.now(), epoch, success_rate))
-            torch.save([self.o_norm.mean, self.o_norm.std, self.g_norm.mean, self.g_norm.std, self.actor_network.state_dict()], \
+            if (not self.test):
+                torch.save([self.o_norm.mean, self.o_norm.std, self.g_norm.mean, self.g_norm.std, self.actor_network.state_dict()], \
                         self.model_path + '/model1.pt')
 
     # pre_process the inputs
@@ -283,7 +279,7 @@ class ddpg_agent:
         self.critic_optim.step()
 
     # do the evaluation
-    def _eval_agent(self):
+    def _eval_agent(self,show):
         total_success_rate = []
         for _ in range(self.args.n_test_rollouts):  #100
             per_success_rate = []
@@ -300,10 +296,14 @@ class ddpg_agent:
                     observation_new, _, _, info = self.env.step(actions)
                     obs = observation_new['observation']
                     g = observation_new['desired_goal']
-                    per_success_rate.append(info['is_success'])
+                    if (show):
+                        if(info['is_success']):
+                            break
+                    else:
+                        per_success_rate.append(info['is_success'])
                 
             else:
-                g = self.env.get_next_goal()
+                g = self.env.get_next_goal(self.test)
                 obs = self.env.reset_sim(g)
                 for t in range(self.env_params['max_timesteps']):
                     with torch.no_grad():
@@ -312,7 +312,11 @@ class ddpg_agent:
                         # convert the actions
                         action = pi.detach().cpu().numpy().squeeze()
                     obs = self.env.execute_action(action)
-                    per_success_rate.append(self.env.success(obs,g))
+                    if (show):
+                        if(self.env.success(obs,g)):
+                            break
+                    else:
+                        per_success_rate.append(self.env.success(obs,g))
 
 
                 

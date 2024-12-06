@@ -20,13 +20,15 @@ train the agent, the MPI part code is copy from openai baselines(https://github.
 # log = True: wandb
 # her = True: HER Strategy   False: DDPG
 #test = True: 评估模型，不训练
+#show: mujoco_py render
 #arguments
 # PS: wandb记录的表名需要手动改。在wandb.init和ddpg_agent.py里。savemodel
 import design_env
 gy = False
 log = False
-her = True
+her = False
 test = False
+show = False
 
 if(log == True):
     import wandb
@@ -62,10 +64,9 @@ def launch(args):
         # get the environment parameters
         env_params = get_env_params(env)
     else:
-        env = design_env.design_env(args.env_name)
-        end_goal = env.get_next_goal()
+        env = design_env.design_env(args.env_name,show)
+        end_goal = env.get_next_goal(test)
         observation = env.reset_sim(end_goal)
-
         env_params = {'obs':observation.shape[0],
                     'goal':end_goal.shape[0],
                     'action':env.action_dim,
@@ -73,7 +74,7 @@ def launch(args):
                     'max_timesteps':env.max_actions}
     # create the ddpg agent to interact with the environment 
     ddpg_trainer = ddpg_agent(args, env, env_params, gy, her,test)
-    ddpg_trainer.learn(log)
+    ddpg_trainer.learn(log,show)
 
 if __name__ == '__main__':
     # take the configuration for the HER
