@@ -16,12 +16,11 @@ ddpg with HER (MPI-version)
 """
 
 class ddpg_agent:
-    def __init__(self, args, env, env_params,gy, her,test):
+    def __init__(self, args, env, env_params,gy,test):
         self.args = args
         self.env = env
         self.env_params = env_params
         self.gy = gy
-        self.her = her
         self.test = test
         # create the network
         self.actor_network = actor(env_params)
@@ -52,7 +51,7 @@ class ddpg_agent:
             self.her_module = her_sampler(self.args.replay_strategy, self.args.replay_k, self.env.sparse_reward)
         
         # create the replay buffer
-        self.buffer = replay_buffer(self.env_params, self.args.buffer_size, self.her_module.sample_her_transitions,self.gy, self.her)
+        self.buffer = replay_buffer(self.env_params, self.args.buffer_size, self.her_module.sample_her_transitions,self.gy)
         # create the normalizer
         self.o_norm = normalizer(size=env_params['obs'], default_clip_range=self.args.clip_range)
         self.g_norm = normalizer(size=env_params['goal'], default_clip_range=self.args.clip_range)
@@ -154,14 +153,15 @@ class ddpg_agent:
                     self._soft_update_target_network(self.critic_target_network, self.critic_network)
             # start to do the evaluation
             success_rate = self._eval_agent(show)
-            if (log == True):
-                wandb.log({"AntReacher/success rate": success_rate})
+            
             
             if MPI.COMM_WORLD.Get_rank() == 0:
                 print('[{}] epoch is: {}, eval success rate is: {:.3f}'.format(datetime.now(), epoch, success_rate))
-            if (not self.test):
-                torch.save([self.o_norm.mean, self.o_norm.std, self.g_norm.mean, self.g_norm.std, self.actor_network.state_dict()], \
-                        self.model_path + '/model1.pt')
+                if (log == True):
+                    wandb.log({"fetch_slide/success rate": success_rate})
+                if (not self.test):
+                    torch.save([self.o_norm.mean, self.o_norm.std, self.g_norm.mean, self.g_norm.std, self.actor_network.state_dict()], \
+                            self.model_path + '/model_seed1.pt')
 
     # pre_process the inputs
     def _preproc_inputs(self, obs, g):
@@ -202,7 +202,7 @@ class ddpg_agent:
                        'obs_next': mb_obs_next,
                        'ag_next': mb_ag_next,
                        }
-        transitions = self.her_module.sample_her_transitions(buffer_temp, num_transitions,self.gy,self.her)
+        transitions = self.her_module.sample_her_transitions(buffer_temp, num_transitions,self.gy)
         obs, g = transitions['obs'], transitions['g']
         # pre process the obs and g
         transitions['obs'], transitions['g'] = self._preproc_og(obs, g)

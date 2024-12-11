@@ -6,12 +6,11 @@ the replay buffer here is basically from the openai baselines code
 
 """
 class replay_buffer:
-    def __init__(self, env_params, buffer_size, sample_func, gy, her):
+    def __init__(self, env_params, buffer_size, sample_func, gy):
         self.env_params = env_params
         self.T = env_params['max_timesteps']
         self.size = buffer_size // self.T   #10000/8 = 1250 episodes
         self.gy = gy
-        self.her = her
         # memory management
         self.current_size = 0
         self.n_transitions_stored = 0
@@ -49,7 +48,7 @@ class replay_buffer:
         temp_buffers['obs_next'] = temp_buffers['obs'][:, 1:, :]
         temp_buffers['ag_next'] = temp_buffers['ag'][:, 1:, :]
         # sample transitions
-        transitions = self.sample_func(temp_buffers, batch_size,self.gy, self.her)
+        transitions = self.sample_func(temp_buffers, batch_size,self.gy)
         return transitions
 
     def _get_storage_idx(self, inc=None):

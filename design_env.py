@@ -11,16 +11,14 @@ import gym
 def design_env(model_name,show):
 
 
-    #model_name
-    #model_name = "ant_reacher.xml"
+    #model_name: ant_reacher, pendulum, ur5, ant_four_rooms
     model_name = model_name + ".xml"
-    #model_name = 'pendulum.xml'
 
 
     
     if (model_name == "ant_reacher.xml"):
         #max_actions and timesteps_per_action
-        max_actions = 800
+        max_actions = 500
         timesteps_per_action = 15 
 
         #initial_state_space
@@ -71,7 +69,7 @@ def design_env(model_name,show):
         end_goal_thresholds = np.array([np.deg2rad(9.5), 0.6])
        
 
-    else:
+    elif (model_name == "ur5.xml"):
         #max_actions and timesteps_per_action
         max_actions = 600
         timesteps_per_action = 15 
@@ -99,6 +97,27 @@ def design_env(model_name,show):
         #end_goal_thresholds
         angle_threshold = np.deg2rad(10)
         end_goal_thresholds = np.array([angle_threshold, angle_threshold, angle_threshold])
+
+    else:
+        max_actions = 700
+        timesteps_per_action = 15 
+
+        initial_joint_pos = np.array([0, 0, 0.55, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, 0.0, -1.0, 0.0, 1.0])
+        initial_joint_pos = np.reshape(initial_joint_pos,(len(initial_joint_pos),1))
+        initial_joint_ranges = np.concatenate((initial_joint_pos,initial_joint_pos),1)
+        initial_joint_ranges[0] = np.array([-6,6])
+        initial_joint_ranges[1] = np.array([-6,6])
+        initial_state_space = np.concatenate((initial_joint_ranges,np.zeros((len(initial_joint_ranges)-1,2))),0)
+
+        max_range = 6
+        goal_space_train = [[-max_range,max_range],[-max_range,max_range],[0.45,0.55]]
+        goal_space_test = [[-max_range,max_range],[-max_range,max_range],[0.45,0.55]]
+
+        project_state_to_end_goal = lambda sim, state: state[:3]
+
+        len_threshold = 0.4
+        height_threshold = 0.2
+        end_goal_thresholds = np.array([len_threshold, len_threshold, height_threshold])
 
 
     env = Environment(model_name, goal_space_train, goal_space_test, project_state_to_end_goal, end_goal_thresholds, 

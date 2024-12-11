@@ -1,0 +1,53 @@
+{
+  "os": "Linux-5.4.0-146-generic-x86_64-with-debian-buster-sid",
+  "python": "3.7.12",
+  "startedAt": "2024-12-09T07:52:49.142886Z",
+  "args": [
+    "--env-name=FetchPush-v1",
+    "--seed=1"
+  ],
+  "program": "train.py",
+  "codePath": "train.py",
+  "git": {
+    "remote": "git@github.com:AuroraHashcat/her.git",
+    "commit": "3c61567eb6730b44d906c62ec8685626bf84bf8b"
+  },
+  "email": "3424206638@qq.com",
+  "root": "/home/wuchenxi/projects/hindsight-experience-replay",
+  "host": "pc14-ThinkStation-P920",
+  "username": "wuchenxi",
+  "executable": "/home/wuchenxi/anaconda3/envs/her/bin/python",
+  "codePathLocal": "train.py",
+  "cpu_count": 16,
+  "cpu_count_logical": 32,
+  "gpu": "Quadro RTX 5000",
+  "gpu_count": 2,
+  "disk": {
+    "/": {
+      "total": "250375106560",
+      "used": "140181532672"
+    }
+  },
+  "memory": {
+    "total": "134754086912"
+  },
+  "cpu": {
+    "count": 16,
+    "countLogical": 32
+  },
+  "gpu_nvidia": [
+    {
+      "name": "Quadro RTX 5000",
+      "memoryTotal": "17179869184",
+      "cudaCores": 3072,
+      "architecture": "Turing"
+    },
+    {
+      "name": "Quadro RTX 5000",
+      "memoryTotal": "17179869184",
+      "cudaCores": 3072,
+      "architecture": "Turing"
+    }
+  ],
+  "cudaVersion": "12.4"
+}
