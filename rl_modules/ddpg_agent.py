@@ -158,10 +158,10 @@ class ddpg_agent:
             if MPI.COMM_WORLD.Get_rank() == 0:
                 print('[{}] epoch is: {}, eval success rate is: {:.3f}'.format(datetime.now(), epoch, success_rate))
                 if (log == True):
-                    wandb.log({"fetch_slide/success rate": success_rate})
+                    wandb.log({"ant_four_rooms/success rate": success_rate})
                 if (not self.test):
                     torch.save([self.o_norm.mean, self.o_norm.std, self.g_norm.mean, self.g_norm.std, self.actor_network.state_dict()], \
-                            self.model_path + '/model_seed1.pt')
+                            self.model_path + '/model_seed5.pt')
 
     # pre_process the inputs
     def _preproc_inputs(self, obs, g):

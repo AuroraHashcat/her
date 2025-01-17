@@ -15,7 +15,7 @@ import torch
 #arguments
 # PS: wandb记录的表名需要手动改。在wandb.init和ddpg_agent.py里。savemodel+seed
 import design_env
-gy = True
+gy = False
 log = True
 test = False
 show = False
@@ -25,7 +25,7 @@ if(log == True):
     os.environ["WANDB_API_KEY"] = "7345a4ba788b2d78ab6a78d185784b2ea818317e"
     wandb.login()
     wandb.init(
-        project="HER", name="fetch_slide_seed1",group="fetch_slide"
+        project="HER", name="ant_four_rooms_seed5",group="ant_four_rooms"
     )
     os.environ["WANDB_MODE"] = "offline"
 
