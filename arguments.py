@@ -8,12 +8,16 @@ Here are the param for the training
 def get_args():
     parser = argparse.ArgumentParser()
     # the environment setting
-    parser.add_argument('--env-name', type=str, default='FetchReach-v1', help='the environment name')
-    parser.add_argument('--n-epochs', type=int, default=50, help='the number of epochs to train the agent')
-    parser.add_argument('--n-cycles', type=int, default=50, help='the times to collect samples per epoch')
+    parser.add_argument('--env-name', type=str, default='ant_reacher', help='the environment name')
+
+    parser.add_argument('--n-epochs', type=int, default=500, help='the number of epochs to train the agent')
+
+    parser.add_argument('--n-cycles', type=int, default=100, help='the times to collect samples per epoch')
+
+    parser.add_argument('--seed', type=int, default=1, help='random seed')
+
     parser.add_argument('--n-batches', type=int, default=40, help='the times to update the network')
     parser.add_argument('--save-interval', type=int, default=5, help='the interval that save the trajectory')
-    parser.add_argument('--seed', type=int, default=123, help='random seed')
     parser.add_argument('--num-workers', type=int, default=1, help='the number of cpus to collect samples')
     parser.add_argument('--replay-strategy', type=str, default='future', help='the HER strategy')
     parser.add_argument('--clip-return', type=float, default=50, help='if clip the returns')
@@ -33,7 +37,7 @@ def get_args():
     parser.add_argument('--clip-range', type=float, default=5, help='the clip range')
     parser.add_argument('--demo-length', type=int, default=20, help='the demo length')
     parser.add_argument('--cuda', action='store_true', help='if use gpu do the acceleration')
-    parser.add_argument('--num-rollouts-per-mpi', type=int, default=2, help='the rollouts per mpi')
+    parser.add_argument('--num-rollouts-per-mpi', type=int, default=1, help='the rollouts per mpi')
 
     args = parser.parse_args()
 

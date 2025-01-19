@@ -1,3 +1,10 @@
-baseline_results = {"circle": {"means": {"training_time": 56.14448523521423, "eval_loss": 0.43690568185828227, "inference_time": 0.21944785118103027, "kl_divergence": 0.3367220082826566}}, "dino": {"means": {"training_time": 52.42900991439819, "eval_loss": 0.6636663504573695, "inference_time": 0.18932247161865234, "kl_divergence": 1.0776467777829486}}, "line": {"means": {"training_time": 51.95650553703308, "eval_loss": 0.8063461301881639, "inference_time": 0.21920037269592285, "kl_divergence": 0.1507506379517439}}, "moons": {"means": {"training_time": 59.61334300041199, "eval_loss": 0.6177251653750534, "inference_time": 0.40653181076049805, "kl_divergence": 0.09263756936748341}}}
-baseline_results = {k: v["means"] for k, v in baseline_results.items()}
-print(baseline_results)
+import gym
+env = gym.make('FetchReach-v1')
+
+obs = env.reset()
+done = False
+
+while (not done):
+    action = env.action_space.sample()
+    obs, reward, done, info = env.step(action)
+    print(reward)

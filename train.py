@@ -16,16 +16,17 @@ import torch
 # PS: wandb记录的表名需要手动改。在wandb.init和ddpg_agent.py里。savemodel+seed
 import design_env
 gy = False
-log = True
+log = False
 test = False
 show = False
+her = False
 
 if(log == True):
     import wandb
     os.environ["WANDB_API_KEY"] = "7345a4ba788b2d78ab6a78d185784b2ea818317e"
     wandb.login()
     wandb.init(
-        project="HER", name="ant_four_rooms_seed5",group="ant_four_rooms"
+        project="HER", name="DDPG_dense_reward_ant_reacher_seed1",group="ant_reacher"
     )
     os.environ["WANDB_MODE"] = "offline"
 
@@ -63,7 +64,7 @@ def launch(args):
                     'action_max':env.action_bounds_high,
                     'max_timesteps':env.max_actions}
     # create the ddpg agent to interact with the environment 
-    ddpg_trainer = ddpg_agent(args, env, env_params, gy, test)
+    ddpg_trainer = ddpg_agent(args, env, env_params, gy, test, her)
     ddpg_trainer.learn(log,show)
 
 if __name__ == '__main__':

@@ -16,11 +16,12 @@ ddpg with HER (MPI-version)
 """
 
 class ddpg_agent:
-    def __init__(self, args, env, env_params,gy,test):
+    def __init__(self, args, env, env_params,gy,test,her):
         self.args = args
         self.env = env
         self.env_params = env_params
         self.gy = gy
+        self.her = her
         self.test = test
         # create the network
         self.actor_network = actor(env_params)
@@ -48,10 +49,10 @@ class ddpg_agent:
         if (self.gy == True):
             self.her_module = her_sampler(self.args.replay_strategy, self.args.replay_k, self.env.compute_reward)
         else:
-            self.her_module = her_sampler(self.args.replay_strategy, self.args.replay_k, self.env.sparse_reward)
+            self.her_module = her_sampler(self.args.replay_strategy, self.args.replay_k, self.env.dense_reward)
         
         # create the replay buffer
-        self.buffer = replay_buffer(self.env_params, self.args.buffer_size, self.her_module.sample_her_transitions,self.gy)
+        self.buffer = replay_buffer(self.env_params, self.args.buffer_size, self.her_module.sample_her_transitions,self.gy,self.her)
         # create the normalizer
         self.o_norm = normalizer(size=env_params['obs'], default_clip_range=self.args.clip_range)
         self.g_norm = normalizer(size=env_params['goal'], default_clip_range=self.args.clip_range)
@@ -202,7 +203,7 @@ class ddpg_agent:
                        'obs_next': mb_obs_next,
                        'ag_next': mb_ag_next,
                        }
-        transitions = self.her_module.sample_her_transitions(buffer_temp, num_transitions,self.gy)
+        transitions = self.her_module.sample_her_transitions(buffer_temp, num_transitions,self.gy,self.her)
         obs, g = transitions['obs'], transitions['g']
         # pre process the obs and g
         transitions['obs'], transitions['g'] = self._preproc_og(obs, g)

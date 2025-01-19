@@ -71,6 +71,16 @@ class Environment():
 
         return rewards
 
+    def dense_reward(self, states, end_goals):
+
+        rewards = np.zeros(states.shape[0])
+
+        for i in range(states.shape[0]):
+            rewards[i] = -((end_goals[i][0]-states[i][0])**2 + (end_goals[i][1]-states[i][1])**2)
+
+
+        return rewards
+
     def success(self, state, end_goal):
         goal_achieved = 1
 
