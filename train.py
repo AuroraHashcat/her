@@ -21,12 +21,16 @@ test = False
 show = False
 her = True
 
+
 if(log == True and MPI.COMM_WORLD.Get_rank() == 0):
     import wandb
-    os.environ["WANDB_API_KEY"] = "7345a4ba788b2d78ab6a78d185784b2ea818317e"
+    # cx's key
+    # os.environ["WANDB_API_KEY"] = "7345a4ba788b2d78ab6a78d185784b2ea818317e"
+    # jy's key
+    os.environ["WANDB_API_KEY"] = "9d317e91d5b56a3aa6f1fe7463d10fa81824ed45"
     wandb.login()
     wandb.init(
-        project="HER", name="HER_sparse_reward_AntWShape_seed4",group="AntWShape"
+        project="HER", name="ours_ant_reacher_seed_1",group="ours_ant_reacher"
     )
     os.environ["WANDB_MODE"] = "offline"
 

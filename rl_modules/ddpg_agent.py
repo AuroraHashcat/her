@@ -1,3 +1,5 @@
+import copy
+
 import torch
 import os
 from datetime import datetime
@@ -10,7 +12,7 @@ from mpi_utils.normalizer import normalizer
 from her_modules.her import her_sampler
 import wandb
 import time
-from llama.llama3_test import generator_four, check_quality
+from llama.llama3_test import generator_four, check_quality, generator_reacher
 import json
 
 """
@@ -80,16 +82,28 @@ class ddpg_agent:
 
         # self.actor_network.load_state_dict(actor_state_dict)
 
+        self.goal_array = []
+        self.relabel_temp = {}
+        self.transition = []
+        self.new_transition = []
+
+        self.eff_traj_num = 0
+        self.train_traj_num = 0 # decide when to update reward model
+        self.test_traj_num = 0
+        self.test_reward = 0
+
+        self.test_data_for_rm = []
+
     def llm_choose_subgoal(self, position):
 
         # reset subgoal_num
-        subgoal_num = None
+        self.subgoal_num = None
 
         """use llama-3.1-8B-Instruct to select subgoals"""
         while True:
             start_time = time.time()
             try:
-                messages, llm_output = generator_four(position)
+                messages, llm_output = generator_reacher(position)
                 epsilon = np.random.uniform(0, 1)
                 if (epsilon < 0.3):
                     llm_output = check_quality(messages, llm_output)
@@ -99,15 +113,57 @@ class ddpg_agent:
                 if isinstance(llm_output, list) and all(
                         isinstance(coord, list) and len(coord) == 2 for coord in llm_output) and len(
                         llm_output) <= 10:
-                    subgoal_num = len(llm_output)
+                    self.subgoal_num = len(llm_output)
                     break  # 如果所有检查都通过，退出循环
             except (json.JSONDecodeError, AssertionError) as e:
                 print(f"Output '{self.llm_output}' does not meet the criteria. Regenerating...")
 
         print("llm output:", llm_output)
-        print("the number of subgoals:", subgoal_num)
+        print("the number of subgoals:", self.subgoal_num)
         return llm_output, llm_generated_time
 
+    def sparse_reward_subgoal(self, env, state):
+
+        goal_for_transition = None
+        goal_status = [False for i in range(len(self.goal_array))]
+        reward = -1
+
+        # Project next_state onto end goal spaces, the self.current_state is already replaced by the next_state!!!
+        proj_end_goal = env.project_state_to_end_goal(env.sim, state) # 取前2位
+
+        for i in range(len(self.goal_array)):
+
+            goal_achieved = True
+
+            # If the difference in two dimension is greater than threshold, goal not achieved
+            for j in range(len(proj_end_goal)): # len(proj_end_goal) = 2
+                if np.absolute(self.goal_array[i][j] - proj_end_goal[j]) > env.end_goal_thresholds[j]:
+                    goal_achieved = False
+                    break
+
+            # If projected state within threshold of goal, mark as achieved
+            if goal_achieved:
+                goal_status[i] = True
+                if i == 0:
+                    reward = 0
+                    print(f"steps {self.episode_step}, end point is achieved, mission success")
+                    goal_for_transition = self.goal_array[0]
+                    return goal_status, reward, goal_for_transition
+                # subgoal achieved, delete subgoal from goal_array
+                else:
+                    reward = 0
+                    # print("reward", reward)
+                    print(f"steps {self.episode_step}, one subgoal is achieved")
+                    goal_for_transition = self.goal_array[i]
+                    del self.goal_array[i]
+                    print("goal_array_still:", self.goal_array)
+                    return goal_status, reward, goal_for_transition
+            else:
+                goal_status[i] = False
+                reward = -1
+                goal_for_transition = self.goal_array[0]
+
+        return goal_status, reward, goal_for_transition
 
     def learn(self,log,show):
         # start to collect samples
@@ -145,18 +201,48 @@ class ddpg_agent:
                             ep_obs.append(obs.copy())
                             ep_ag.append(ag.copy())
                         else:
+                            achieved_subgoal_num = 0
+                            relabel_clip = False
+                            done = False
+                            self.relabel_temp = {}
+                            self.transition = []
+
                             g = self.env.get_next_goal(self.test)
                             g = self.env.project_state_to_end_goal(self.env.sim, g)
                             obs = self.env.reset_sim(g)
                             ag = self.env.project_state_to_end_goal(self.env.sim,obs)
-                            # subgoals = [[1,1],[2,2]]
+
+
                             llm_input = "start point" + str(np.round(ag)) + " " + "end point" + str(np.round(g))
-                            subgoals, time = self.llm_choose_subgoal(llm_input)
+                            self.goal_array, time = self.llm_choose_subgoal(llm_input)
+
                             for t in range(self.env_params['max_timesteps']):
                                 action = self.env.action_space.sample()
                                 obs_new = self.env.execute_action(action)
                                 ag_new = self.env.project_state_to_end_goal(self.env.sim,obs_new)
-                                
+
+                                goal_status, reward_relabelled, goal_relabelled = self.sparse_reward_subgoal(self.env,
+                                                                                                             obs_new)
+
+                                if goal_status[0]:
+                                    done = True
+                                # calculate reward
+                                done_no_max = float(done)
+
+                                if reward_relabelled == 0:
+                                    achieved_subgoal_num += 1
+                                    relabel_clip = True
+                                    # goal
+                                    relabel_goal = goal_relabelled
+                                    # index
+                                    relabel_goal_index = t
+                                    self.relabel_temp[f'subgoal_{achieved_subgoal_num}'] = (
+                                    achieved_subgoal_num, relabel_goal, relabel_goal_index)
+
+                                self.transition.append(
+                                    [obs, action, g, reward_relabelled, obs_new, done, done_no_max])
+
+
                                 ep_obs.append(obs.copy())
                                 ep_ag.append(ag.copy())
                                 ep_g.append(g.copy())
@@ -166,6 +252,79 @@ class ddpg_agent:
                                 ag = ag_new
                             ep_obs.append(obs.copy())
                             ep_ag.append(ag.copy())
+
+                            print("relabel temp dict: ", self.relabel_temp)
+                            """
+                            1) if done_no_max is True, there is no need for relabel.
+                            2) if done_no_max is False and no sub-goal is achieved, there is no need for relabel either. ->  add her future relabel?
+                            3) if done_no_max is False and sub-goal is True, run relabel clip: -> multiple trajectories
+                            """
+                            if done_no_max:  # -> 1) add her future relabel  2) gcsl relabel (ablation study)
+                                self.eff_traj_num += 1
+                                self.train_traj_num += 1
+
+                                for transition in self.transition:
+                                    state, action, goal, reward, next_state, done, done_no_max = transition
+                                    obs = np.concatenate((state, goal), axis=0)
+                                    next_obs = np.concatenate((next_state, goal), axis=0)
+                                    # 1) add RM buffer (s, a, g, r, done_no_max)
+                                    self.reward_model.add_eff_data_sga(state, action, goal, reward, done_no_max)
+
+                            elif relabel_clip:
+                                for key, (subgoal_num, goal, goal_index) in self.relabel_temp.items():
+                                    print(key, subgoal_num, goal, goal_index)
+                                    if goal_index == 0:  # if the step is 0 and the sub goal is achieved.
+                                        print("goal_index is 0, breaking out of the loop, no need for relabel.")
+                                        continue
+                                    # 1) clip transition and relabel done
+                                    self.new_transition = copy.deepcopy(
+                                        self.transition[:(goal_index + 1)])  # deepcopy创建全新的切片
+                                    self.new_transition[-1][5] = True
+                                    # done_no_max
+                                    self.new_transition[-1][6] = float(self.new_transition[-1][5])
+                                    # 2) relabel goal
+                                    for i in range(len(self.new_transition)):
+                                        self.new_transition[i][2] = goal  # 更新goal_relabelled为新的goal
+                                    # 3） recompute reward
+                                    for i in range(len(self.new_transition)):
+                                        # 此处应该测next_state和goal之间的距离阈值
+                                        if (np.absolute(self.new_transition[i][4][0] - goal[0]) <
+                                            self.env.end_goal_thresholds[
+                                                0]) and \
+                                                (np.absolute(self.new_transition[i][4][1] - goal[1]) <
+                                                 self.env.end_goal_thresholds[
+                                                     1]):
+                                            self.new_transition[i][3] = 1
+                                        else:
+                                            self.new_transition[i][3] = -1
+
+                                    self.eff_traj_num += 1
+
+                                    # store data into train/test set
+                                    # 1) test_set
+                                    if self.eff_traj_num % 10 == 9:  # train_set:test_set = 9:1
+                                        self.test_traj_num += 1
+                                        # add test data for reward model
+                                        self.test_data_for_rm.append(self.new_transition)
+
+                                    # 2) train_set
+                                    else:
+                                        self.train_traj_num += 1
+                                        for transition in self.new_transition:
+                                            state, action, goal, reward, next_state, done, done_no_max = transition
+                                            obs = np.concatenate((state, goal), axis=0)
+                                            next_obs = np.concatenate((next_state, goal), axis=0)
+                                            # 1) add train_set data into RM buffer (s, a, g, r, done_no_max)
+                                            self.reward_model.add_eff_data_sga(state, action, goal, reward, done_no_max)
+
+                            else:
+                                for j in range(len(self.transition)):
+                                    state, action, goal, reward, next_state, done, done_no_max = self.transition[j]
+                                    # 1) add RM buffer (s, a, g, r, done)
+                                    self.reward_model.add_nor_data_sga(state, action, goal, reward, done)
+
+                            print(
+                                f"we have {self.eff_traj_num} eff_traj, {self.train_traj_num} train_set and {self.test_traj_num} test_set so far.")
 
                         mb_obs.append(ep_obs)
                         mb_ag.append(ep_ag)
