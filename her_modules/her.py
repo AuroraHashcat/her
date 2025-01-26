@@ -1,4 +1,5 @@
 import numpy as np
+import random
 
 class her_sampler:
     def __init__(self, replay_strategy, replay_k, reward_func=None):
@@ -30,9 +31,45 @@ class her_sampler:
             future_ag = episode_batch['ag'][episode_idxs[her_indexes], future_t]
             transitions['g'][her_indexes] = future_ag
             # to get the params to re-compute reward
-        if(gy == True):
-            transitions['r'] = np.expand_dims(self.reward_func(transitions['ag_next'], transitions['g'], None), 1)
-        else:
-            transitions['r'] = np.expand_dims(self.reward_func(transitions['ag_next'], transitions['g']), 1)
+        # if(gy == True):
+        #     transitions['r'] = np.expand_dims(self.reward_func(transitions['ag_next'], transitions['g'], None), 1)
+        # else:
+        transitions['r'] = np.expand_dims(self.reward_func(transitions['ag_next'], transitions['g']), 1)
         transitions = {k: transitions[k].reshape(batch_size, *transitions[k].shape[1:]) for k in transitions.keys()}
+        return transitions
+
+    def sample_subgoal_transitions(self, episode_batch, batch_size_in_transitions):  #先relabel，把成功的拿出来（或者加个概率），剩下的在失败里随机选
+        episode = {key:episode_batch[key][0] for key in episode_batch.keys() if key != 'subgoals'} #没有把mb和ep合成一个，如果去掉了rollouts则不需要这一句
+        episode['subgoals'] = episode_batch['subgoals']
+        episode['r'] = []
+        episodes = []
+        #episode是一个episode完整的traj，是字典，有'obs','ag','g','actions','obs_next','ag_next','subgoals'
+        transitions = {key:[] for key in episode.keys()}
+        success_num = 0
+        for subgoal in episode['subgoals']:  
+            for T in range(batch_size_in_transitions):
+                # relabel出来subgoals条新的traj
+                episode['g'][T] = subgoal
+                # 检查subgoals是否到达
+                reward, achieved = self.reward_func(episode['obs'][T], episode['g'][T])
+                episode['r'].append(reward)
+                if (achieved):
+                    for key in episode.keys():
+                        if (key != 'subgoals'):
+                            transitions[key].append(episode[key][T])
+                    success_num += 1
+                    break
+            truncated_episode = {key:episode[key][:T+1] for key in episode.keys()}
+            episodes.append(truncated_episode)
+            #得到了处理完的新traj: truncated_episode
+        #得到了新的subgoals个traj：episodes list 存 episode dict, 要选episode-timesteps的transition共batch_size个组成transitions返回
+        # transitions是一个字典，值是只有某键的随机序列，如obs随机序列，但transitions[key][i]是一个transition里拿出来的
+        for i in range(batch_size_in_transitions - success_num):
+            episode_idx = random.randint(0,len(episodes)-1)
+            time_idx = random.randint(0,episodes[episode_idx]['actions'].shape[0]-1)
+            #print(episode_idx, time_idx)
+            for key in episode.keys():
+                #print(episodes[episode_idx][key].shape)
+                if (key != 'subgoals'):
+                    transitions[key].append(episodes[episode_idx][key][time_idx])
         return transitions

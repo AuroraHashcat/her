@@ -12,14 +12,11 @@ class Environment():
         self.name = model_name
 
         # Create Mujoco Simulation
-        self.model = load_model_from_path("/home/wuchenxi/project/mujoco_files/"+ model_name)
+        self.model = load_model_from_path("/home/wuchenxi/projects/hindsight-experience-replay/"+ model_name)
         self.sim = MjSim(self.model)
 
         # Set dimensions and ranges of states, actions, and goals in order to configure actor/critic networks
-        if model_name == "pendulum.xml":
-            self.state_dim = 2*len(self.sim.data.qpos) + len(self.sim.data.qvel)
-        else:
-            self.state_dim = len(self.sim.data.qpos) + len(self.sim.data.qvel) # State will include (i) joint angles and (ii) joint velocities
+        self.state_dim = len(self.sim.data.qpos) + len(self.sim.data.qvel) # State will include (i) joint angles and (ii) joint velocities
         self.action_dim = len(self.sim.model.actuator_ctrlrange) # low-level action dim
         self.action_bounds_low = self.sim.model.actuator_ctrlrange[0][0]
         self.action_bounds_high = self.sim.model.actuator_ctrlrange[0][1] # low-level action bounds
@@ -46,7 +43,7 @@ class Environment():
             self.viewer = MjViewer(self.sim)
         self.num_frames_skip = num_frames_skip
 
-
+    #her
     def sparse_reward(self, states, end_goals):
 
         rewards = np.zeros(states.shape[0])  # 初始化奖励数组
@@ -70,6 +67,7 @@ class Environment():
                 rewards[i] = -1
 
         return rewards
+
 
     def dense_reward(self, states, end_goals):
 
@@ -96,12 +94,7 @@ class Environment():
         
     # Get state, which concatenates joint positions and velocities
     def get_state(self):
-
-        if self.name == "pendulum.xml":
-            return np.concatenate([np.cos(self.sim.data.qpos),np.sin(self.sim.data.qpos),
-                               self.sim.data.qvel])
-        else:
-            return np.concatenate((self.sim.data.qpos, self.sim.data.qvel))
+        return np.concatenate((self.sim.data.qpos, self.sim.data.qvel))
 
     # Reset simulation to state within initial state specified by user
     def reset_sim(self, next_goal = None):
@@ -174,11 +167,19 @@ class Environment():
             # print("Goal Room: %d" % goal_room)
             # print("Initial Ant Room: %d" % initial_room)
 
-        else:
+        elif self.name == "ant_s_shape.xml":
 
-            # Reset joint positions and velocities
-            for i in range(len(self.sim.data.qpos)):
-                self.sim.data.qpos[i] = np.random.uniform(self.initial_state_space[i][0],self.initial_state_space[i][1])
+            self.sim.data.qpos[0] = 6
+            self.sim.data.qpos[1] = 6
+            self.sim.data.qpos[2] = np.random.uniform(self.initial_state_space[2][0],self.initial_state_space[2][1])
+
+            for i in range(len(self.sim.data.qvel)):
+                self.sim.data.qvel[i] = np.random.uniform(self.initial_state_space[len(self.sim.data.qpos) + i][0],self.initial_state_space[len(self.sim.data.qpos) + i][1])
+
+        elif self.name == "ant_w_shape.xml":
+            self.sim.data.qpos[0] = -6
+            self.sim.data.qpos[1] = 6
+            self.sim.data.qpos[2] = np.random.uniform(self.initial_state_space[2][0],self.initial_state_space[2][1])
 
             for i in range(len(self.sim.data.qvel)):
                 self.sim.data.qvel[i] = np.random.uniform(self.initial_state_space[len(self.sim.data.qpos) + i][0],self.initial_state_space[len(self.sim.data.qpos) + i][1])
@@ -260,48 +261,8 @@ class Environment():
 
         end_goal = np.zeros((len(self.goal_space_test)))
 
-        if self.name == "ur5.xml":
 
-            goal_possible = False
-            while not goal_possible:
-                end_goal = np.zeros(shape=(self.end_goal_dim,))
-                end_goal[0] = np.random.uniform(self.goal_space_test[0][0],self.goal_space_test[0][1])
-
-                end_goal[1] = np.random.uniform(self.goal_space_test[1][0],self.goal_space_test[1][1])
-                end_goal[2] = np.random.uniform(self.goal_space_test[2][0],self.goal_space_test[2][1])
-
-                # Next need to ensure chosen joint angles result in achievable task (i.e., desired end effector position is above ground)
-
-                theta_1 = end_goal[0]
-                theta_2 = end_goal[1]
-                theta_3 = end_goal[2]
-
-                # shoulder_pos_1 = np.array([0,0,0,1])
-                upper_arm_pos_2 = np.array([0,0.13585,0,1])
-                forearm_pos_3 = np.array([0.425,0,0,1])
-                wrist_1_pos_4 = np.array([0.39225,-0.1197,0,1])
-
-                # Transformation matrix from shoulder to base reference frame
-                T_1_0 = np.array([[1,0,0,0],[0,1,0,0],[0,0,1,0.089159],[0,0,0,1]])
-
-                # Transformation matrix from upper arm to shoulder reference frame
-                T_2_1 = np.array([[np.cos(theta_1), -np.sin(theta_1), 0, 0],[np.sin(theta_1), np.cos(theta_1), 0, 0],[0,0,1,0],[0,0,0,1]])
-
-                # Transformation matrix from forearm to upper arm reference frame
-                T_3_2 = np.array([[np.cos(theta_2),0,np.sin(theta_2),0],[0,1,0,0.13585],[-np.sin(theta_2),0,np.cos(theta_2),0],[0,0,0,1]])
-
-                # Transformation matrix from wrist 1 to forearm reference frame
-                T_4_3 = np.array([[np.cos(theta_3),0,np.sin(theta_3),0.425],[0,1,0,0],[-np.sin(theta_3),0,np.cos(theta_3),0],[0,0,0,1]])
-
-                forearm_pos = T_1_0.dot(T_2_1).dot(T_3_2).dot(forearm_pos_3)[:3]
-                wrist_1_pos = T_1_0.dot(T_2_1).dot(T_3_2).dot(T_4_3).dot(wrist_1_pos_4)[:3]
-
-                # Make sure wrist 1 pos is above ground so can actually be reached
-                if np.absolute(end_goal[0]) > np.pi/4 and forearm_pos[2] > 0.05 and wrist_1_pos[2] > 0.15:
-                    goal_possible = True
-
-
-        elif self.name == "ant_four_rooms.xml":
+        if self.name == "ant_four_rooms.xml":
 
             # Randomly select one of the four rooms in which the goal will be located
             room_num = np.random.randint(0,4)
@@ -324,19 +285,15 @@ class Environment():
             elif room_num == 3:
                 end_goal[1] *= -1
 
-
-
-        elif not test and self.goal_space_train is not None:
+        elif self.name == "ant_reacher.xml":
             for i in range(len(self.goal_space_train)):
                 end_goal[i] = np.random.uniform(self.goal_space_train[i][0],self.goal_space_train[i][1])
-        else:
-            assert self.goal_space_test is not None, "Need goal space for testing. Set goal_space_test variable in \"design_env.py\" file"
-
-            for i in range(len(self.goal_space_test)):
-                end_goal[i] = np.random.uniform(self.goal_space_test[i][0],self.goal_space_test[i][1])
-
+                
+        elif self.name == "ant_w_shape.xml" or self.name == "ant_s_shape.xml": 
+            end_goal[0] = -6
+            end_goal[1] = -6
 
         # Visualize End Goal
-        self.display_end_goal(end_goal)
+        # self.display_end_goal(end_goal)
 
         return end_goal

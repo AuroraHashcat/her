@@ -15,18 +15,18 @@ import torch
 #arguments
 # PS: wandb记录的表名需要手动改。在wandb.init和ddpg_agent.py里。savemodel+seed
 import design_env
-gy = True
+gy = False
 log = True
 test = False
 show = False
-her = False
+her = True
 
 if(log == True and MPI.COMM_WORLD.Get_rank() == 0):
     import wandb
     os.environ["WANDB_API_KEY"] = "7345a4ba788b2d78ab6a78d185784b2ea818317e"
     wandb.login()
     wandb.init(
-        project="HER", name="DDPG_dense_reward_FetchPickAndPlace_seed5",group="FetchPickAndPlace"
+        project="HER", name="HER_sparse_reward_AntSShape_seed1",group="AntSShape"
     )
     os.environ["WANDB_MODE"] = "offline"
 
@@ -57,6 +57,7 @@ def launch(args):
     else:
         env = design_env.design_env(args.env_name,show)
         end_goal = env.get_next_goal(test)
+        end_goal = env.project_state_to_end_goal(env.sim, end_goal)
         observation = env.reset_sim(end_goal)
         env_params = {'obs':observation.shape[0],
                     'goal':end_goal.shape[0],

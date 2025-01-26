@@ -49,7 +49,7 @@ class replay_buffer:
         temp_buffers['obs_next'] = temp_buffers['obs'][:, 1:, :]
         temp_buffers['ag_next'] = temp_buffers['ag'][:, 1:, :]
         # sample transitions
-        transitions = self.sample_func(temp_buffers, batch_size,self.gy,self.her)
+        transitions = self.sample_func(temp_buffers, batch_size,self.gy, self.her)
         return transitions
 
     def _get_storage_idx(self, inc=None):

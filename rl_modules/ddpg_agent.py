@@ -9,6 +9,9 @@ from rl_modules.models import actor, critic
 from mpi_utils.normalizer import normalizer
 from her_modules.her import her_sampler
 import wandb
+import time
+#from llama.llama3_test import generator, check_quality
+import json
 
 """
 ddpg with HER (MPI-version)
@@ -49,7 +52,7 @@ class ddpg_agent:
         if (self.gy == True):
             self.her_module = her_sampler(self.args.replay_strategy, self.args.replay_k, self.env.compute_reward)
         else:
-            self.her_module = her_sampler(self.args.replay_strategy, self.args.replay_k, self.env.dense_reward)
+            self.her_module = her_sampler(self.args.replay_strategy, self.args.replay_k, self.env.sparse_reward)
         
         # create the replay buffer
         self.buffer = replay_buffer(self.env_params, self.args.buffer_size, self.her_module.sample_her_transitions,self.gy,self.her)
@@ -65,19 +68,16 @@ class ddpg_agent:
             if not os.path.exists(self.model_path):
                 os.mkdir(self.model_path)
 
-        if (self.test):
-            saved_data = torch.load('/home/wuchenxi/projects/hindsight-experience-replay/saved_models/AntReacher/model2.pt')
-            o_mean, o_std, g_mean, g_std, actor_state_dict = saved_data
+        # if (self.test):
+        # saved_data = torch.load('/home/wuchenxi/projects/hindsight-experience-replay/saved_models/ant_reacher/model_seed1.pt')
+        # o_mean, o_std, g_mean, g_std, actor_state_dict = saved_data
 
-            self.o_norm.mean = o_mean
-            self.o_norm.std = o_std
-            self.g_norm.mean = g_mean
-            self.g_norm.std = g_std
+        # self.o_norm.mean = o_mean
+        # self.o_norm.std = o_std
+        # self.g_norm.mean = g_mean
+        # self.g_norm.std = g_std
 
-            self.actor_network.load_state_dict(actor_state_dict)
-
-
-
+        # self.actor_network.load_state_dict(actor_state_dict)
 
     def learn(self,log,show):
         # start to collect samples
@@ -116,8 +116,9 @@ class ddpg_agent:
                             ep_ag.append(ag.copy())
                         else:
                             g = self.env.get_next_goal(self.test)
+                            g = self.env.project_state_to_end_goal(self.env.sim, g)
                             obs = self.env.reset_sim(g)
-                            ag = self.env.project_state_to_end_goal(self.env.sim,obs)    
+                            ag = self.env.project_state_to_end_goal(self.env.sim,obs) 
                             for t in range(self.env_params['max_timesteps']):
                                 action = self.env.action_space.sample()
                                 obs_new = self.env.execute_action(action)
@@ -148,7 +149,7 @@ class ddpg_agent:
                     self._update_normalizer([mb_obs, mb_ag, mb_g, mb_actions])
                     for _ in range(self.args.n_batches):
                         # train the network
-                        self._update_network()
+                        self._update_network(log)
                     # soft update
                     self._soft_update_target_network(self.actor_target_network, self.actor_network)
                     self._soft_update_target_network(self.critic_target_network, self.critic_network)
@@ -159,10 +160,10 @@ class ddpg_agent:
             if MPI.COMM_WORLD.Get_rank() == 0:
                 print('[{}] epoch is: {}, eval success rate is: {:.3f}'.format(datetime.now(), epoch, success_rate))
                 if (log == True):
-                    wandb.log({"FetchPickAndPlace/success rate": success_rate})
+                    wandb.log({"AntReacher/success rate": success_rate})
                 if (not self.test):
                     torch.save([self.o_norm.mean, self.o_norm.std, self.g_norm.mean, self.g_norm.std, self.actor_network.state_dict()], \
-                            self.model_path + 'ddpg_model_seed5.pt')
+                            self.model_path + '/apo_sparse_model_seed5.pt')
 
     # pre_process the inputs
     def _preproc_inputs(self, obs, g):
@@ -225,7 +226,7 @@ class ddpg_agent:
             target_param.data.copy_((1 - self.args.polyak) * param.data + self.args.polyak * target_param.data)
 
     # update the network
-    def _update_network(self):
+    def _update_network(self,log):
         # sample the episodes
         transitions = self.buffer.sample(self.args.batch_size)   #256
         # pre-process the observation and goal
@@ -235,14 +236,19 @@ class ddpg_agent:
         # start to do the update
         obs_norm = self.o_norm.normalize(transitions['obs'])
         g_norm = self.g_norm.normalize(transitions['g'])
-        inputs_norm = np.concatenate([obs_norm, g_norm], axis=1)
+        inputs_norm = np.concatenate([obs_norm, g_norm],axis = 1)
         obs_next_norm = self.o_norm.normalize(transitions['obs_next'])
         g_next_norm = self.g_norm.normalize(transitions['g_next'])
-        inputs_next_norm = np.concatenate([obs_next_norm, g_next_norm], axis=1)
+        inputs_next_norm = np.concatenate([obs_next_norm, g_next_norm],axis = 1)
         # transfer them into the tensor
         inputs_norm_tensor = torch.tensor(inputs_norm, dtype=torch.float32)
         inputs_next_norm_tensor = torch.tensor(inputs_next_norm, dtype=torch.float32)
-        actions_tensor = torch.tensor(transitions['actions'], dtype=torch.float32)
+        actions_np_array = np.array(transitions['actions'])
+ 
+        # 然后，将这个 numpy.ndarray 转换为 PyTorch 张量
+        actions_tensor = torch.tensor(actions_np_array, dtype=torch.float32)
+
+        # actions_tensor = torch.tensor(transitions['actions'], dtype=torch.float32)
         r_tensor = torch.tensor(transitions['r'], dtype=torch.float32) 
         if self.args.cuda:
             inputs_norm_tensor = inputs_norm_tensor.cuda()
@@ -268,6 +274,9 @@ class ddpg_agent:
         actions_real = self.actor_network(inputs_norm_tensor)
         actor_loss = -self.critic_network(inputs_norm_tensor, actions_real).mean()
         actor_loss += self.args.action_l2 * (actions_real / self.env_params['action_max']).pow(2).mean()
+        if (log == True):
+            wandb.log({"AntReacher/actor_loss": actor_loss,
+                        "AntReacher/critic_loss": critic_loss})
         # start to update the network
         self.actor_optim.zero_grad()
         actor_loss.backward()
@@ -305,6 +314,7 @@ class ddpg_agent:
                 
             else:
                 g = self.env.get_next_goal(self.test)
+                g = self.env.project_state_to_end_goal(self.env.sim, g)
                 obs = self.env.reset_sim(g)
                 for t in range(self.env_params['max_timesteps']):
                     with torch.no_grad():
