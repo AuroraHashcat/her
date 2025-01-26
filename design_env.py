@@ -14,7 +14,7 @@ def design_env(model_name,show):
     #model_name: ant_reacher, pendulum, ur5, ant_four_rooms
     model_name = model_name + ".xml"
         
-    max_actions = 700
+    max_actions = 800
     timesteps_per_action = 15 
 
     initial_joint_pos = np.array([0, 0, 0.55, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, 0.0, -1.0, 0.0, 1.0])

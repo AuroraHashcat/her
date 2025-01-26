@@ -36,9 +36,22 @@ class her_sampler:
             # to get the params to re-compute reward
 
         if self.args.reward_model_relabel:
-            transitions['r'] = np.expand_dims(self.reward_func.r_hat_batch(np.concatenate([transitions['obs'], transitions['g'],transitions['actions']]), axis=-1), 1)
+            # print(transitions['obs'].shape)  # 应该是 (N, 29)
+            # print(transitions['g'].shape)  # 应该是 (N, 2)
+            # print(transitions['actions'].shape)  # 应该是 (N, 8)
+            # combined = np.concatenate([transitions['obs'], transitions['g'], transitions['actions']], axis=-1)
+            # print(combined.shape)  # 应该是 (N, 29 + 2 + 8) = (N, 39)
+
+            transitions['r'] = np.expand_dims(self.reward_func.r_hat_batch(np.concatenate([transitions['obs'], transitions['g'],transitions['actions']], axis=-1)), 1)
+            # reward_mean = np.mean(transitions['r'])
+            # print(f"Mean reward ours: {reward_mean}")
+
         else:
+
             transitions['r'] = np.expand_dims(self.env.sparse_reward(transitions['ag_next'], transitions['g']), 1)
+            # print(transitions['r'].shape)
+            # reward_mean = np.mean(transitions['r'])
+            # print(f"Mean reward her: {reward_mean}")
         transitions = {k: transitions[k].reshape(batch_size, *transitions[k].shape[1:]) for k in transitions.keys()}
         return transitions
 

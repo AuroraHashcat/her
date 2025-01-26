@@ -90,7 +90,8 @@ class ddpg_agent:
         # self.g_norm.mean = g_mean
         # self.g_norm.std = g_std
 
-
+        self.llm_input = []
+        self.llm_output = []
 
         self.goal_array = []
         self.relabel_temp = {}
@@ -113,26 +114,28 @@ class ddpg_agent:
         while True:
             start_time = time.time()
             try:
-                messages, llm_output = generator_reacher(position)
+                messages, self.llm_output = generator_reacher(position)
                 epsilon = np.random.uniform(0, 1)
                 if (epsilon < 0.3):
-                    llm_output = check_quality(messages, llm_output)
+                    self.llm_output = check_quality(messages, self.llm_output)
                 end_time = time.time()
                 llm_generated_time = end_time - start_time
-                llm_output = json.loads(llm_output)
-                if isinstance(llm_output, list) and all(
-                        isinstance(coord, list) and len(coord) == 2 for coord in llm_output) and len(
-                        llm_output) <= 10:
-                    self.subgoal_num = len(llm_output)
+                self.llm_output = json.loads(self.llm_output)
+                if isinstance(self.llm_output, list) and all(
+                        isinstance(coord, list) and len(coord) == 2 for coord in self.llm_output) and len(
+                    self.llm_output) <= 10:
+                    self.goal_array.extend(self.llm_output)
+                    self.subgoal_num = len(self.llm_output)
                     break  # 如果所有检查都通过，退出循环
             except (json.JSONDecodeError, AssertionError) as e:
                 print(f"Output '{self.llm_output}' does not meet the criteria. Regenerating...")
 
-        print("llm output:", llm_output)
+        print("llm output:", self.llm_output)
         print("the number of subgoals:", self.subgoal_num)
-        return llm_output, llm_generated_time
+        print("goal_array:", self.goal_array)
+        return self.goal_array, llm_generated_time
 
-    def sparse_reward_subgoal(self, env, state):
+    def sparse_reward_subgoal(self, env, state,t):
 
         goal_for_transition = None
         goal_status = [False for i in range(len(self.goal_array))]
@@ -156,14 +159,14 @@ class ddpg_agent:
                 goal_status[i] = True
                 if i == 0:
                     reward = 0
-                    print(f"steps {self.episode_step}, end point is achieved, mission success")
+                    print(f"steps {t}, end point is achieved, mission success")
                     goal_for_transition = self.goal_array[0]
                     return goal_status, reward, goal_for_transition
                 # subgoal achieved, delete subgoal from goal_array
                 else:
                     reward = 0
                     # print("reward", reward)
-                    print(f"steps {self.episode_step}, one subgoal is achieved")
+                    print(f"steps {t}, one subgoal is achieved")
                     goal_for_transition = self.goal_array[i]
                     del self.goal_array[i]
                     print("goal_array_still:", self.goal_array)
@@ -188,9 +191,6 @@ class ddpg_agent:
         self.reward_model.save(reward_model_path)
 
     def test_reward_model(self):
-        # with open(test_path, 'rb') as f:
-        #     test_set = pickle.load(f)
-        #     print(f"test reward model, and the test_set is {len(test_set)}")
 
         test_set = self.test_data_for_rm
         print(f"test reward model, and the test_set is {len(test_set)}")
@@ -243,7 +243,7 @@ class ddpg_agent:
 
                                 # learn reward model
                                 print("\nBatch:", epoch, "Episode:", cycle, "start update reward model network")
-                                rm_path = "/saved_models/reward_model/rm_model.pt"
+                                rm_path = "/home/yanjy/work_project/her/saved_models/ant_reacher/rm_model_seed1.pt"
                                 self.learn_reward_model(rm_path)
 
                                 if self.test_traj_num >= 1:
@@ -254,6 +254,8 @@ class ddpg_agent:
 
                         # reset the rollouts
                         ep_obs, ep_ag, ep_g, ep_actions = [], [], [], []
+                        self.goal_array = []
+
                         # reset the environment
                         if (self.gy == True):
                             observation = self.env.reset()
@@ -281,6 +283,7 @@ class ddpg_agent:
                             ep_obs.append(obs.copy())
                             ep_ag.append(ag.copy())
                         else:
+                            print("\nBatch:", epoch, "Episode:", cycle)
                             achieved_subgoal_num = 0
                             relabel_clip = False
                             done = False
@@ -289,12 +292,15 @@ class ddpg_agent:
 
                             g = self.env.get_next_goal(self.test)
                             g = self.env.project_state_to_end_goal(self.env.sim, g)
+                            self.goal_array.append(g)
+                            print("Next End Goal: ", self.goal_array[0])
                             obs = self.env.reset_sim(g)
+                            print("Initial Ant Position: ", obs[:3])
                             ag = self.env.project_state_to_end_goal(self.env.sim,obs)
 
 
-                            llm_input = "start point" + str(np.round(ag)) + " " + "end point" + str(np.round(g))
-                            self.goal_array, time = self.llm_choose_subgoal(llm_input)
+                            self.llm_input = "start point" + str(np.round(ag)) + " " + "end point" + str(np.round(g))
+                            self.goal_array, time = self.llm_choose_subgoal(self.llm_input)
 
                             for t in range(self.env_params['max_timesteps']):
                                 action = self.env.action_space.sample()
@@ -302,14 +308,18 @@ class ddpg_agent:
                                 ag_new = self.env.project_state_to_end_goal(self.env.sim,obs_new)
 
                                 goal_status, reward_relabelled, goal_relabelled = self.sparse_reward_subgoal(self.env,
-                                                                                                             obs_new)
+                                                                                                             obs_new,t)
 
                                 if goal_status[0]:
                                     done = True
+                                if t + 1 == self.env_params['max_timesteps']:
+                                    done = True
+                                    print("Out of actions (Steps: %d)" % t)
                                 # calculate reward
-                                done_no_max = float(done)
+                                done = float(done)
+                                done_no_max = 0 if t + 1 == self.env.max_actions else done
 
-                                if reward_relabelled == 0:
+                                if not done_no_max and (reward_relabelled == 0):
                                     achieved_subgoal_num += 1
                                     relabel_clip = True
                                     # goal
@@ -332,6 +342,7 @@ class ddpg_agent:
                                 ag = ag_new
                             ep_obs.append(obs.copy())
                             ep_ag.append(ag.copy())
+
 
                             print("relabel temp dict: ", self.relabel_temp)
                             """
@@ -405,6 +416,7 @@ class ddpg_agent:
 
                             print(
                                 f"we have {self.eff_traj_num} eff_traj, {self.train_traj_num} train_set and {self.test_traj_num} test_set so far.")
+                            print()
 
                         mb_obs.append(ep_obs)
                         mb_ag.append(ep_ag)
@@ -432,10 +444,10 @@ class ddpg_agent:
             if MPI.COMM_WORLD.Get_rank() == 0:
                 print('[{}] epoch is: {}, eval success rate is: {:.3f}'.format(datetime.now(), epoch, success_rate))
                 if (log == True):
-                    wandb.log({"AntWShape/success rate": success_rate})
+                    wandb.log({"Ant_reacher/success rate": success_rate})
                 if (not self.test):
                     torch.save([self.o_norm.mean, self.o_norm.std, self.g_norm.mean, self.g_norm.std, self.actor_network.state_dict()], \
-                            self.model_path + '/apo_sparse_model_seed4.pt')
+                            self.model_path + '/apo_sparse_model_seed1.pt')
 
     # pre_process the inputs
     def _preproc_inputs(self, obs, g):
@@ -476,7 +488,7 @@ class ddpg_agent:
                        'obs_next': mb_obs_next,
                        'ag_next': mb_ag_next,
                        }
-        transitions = self.her_module.sample_her_transitions(buffer_temp, num_transitions)
+        transitions = self.her_module.sample_her_transitions(buffer_temp, num_transitions,self.gy,self.her)
         obs, g = transitions['obs'], transitions['g']
         # pre process the obs and g
         transitions['obs'], transitions['g'] = self._preproc_og(obs, g)

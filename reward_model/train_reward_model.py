@@ -331,26 +331,26 @@ class RewardModel:
     def r_hat(self, x):
         # the network parameterizes r hat in eqn 1 from the paper
         # return the reward prediction value
-        logits = self.reward_model(torch.from_numpy(x).float().to(self.cfg.device))
+        logits = self.reward_model(torch.from_numpy(x).float().to(self.cfg.cuda))
         # probs = torch.sigmoid(logits) # [0,1]
         # r_hat = torch.tanh(logits).detach().cpu().numpy() # [-1,1]
-        r_hat = -torch.sigmoid(logits).detach().cpu().numpy() # [-1,0]
+        r_hat = torch.sigmoid(logits).detach().cpu().numpy()-1 # [-1,0]
         return r_hat
 
     def r_hat_batch(self, x):
         # they say they average the rewards from each member of the ensemble, but I think this only makes sense if the rewards are already normalized
         # but I don't understand how the normalization should be happening right now :(
-        logits = self.reward_model(torch.from_numpy(x).float().to(self.cfg.device))
+        logits = self.reward_model(torch.from_numpy(x).float().to(self.cfg.cuda))
         # probs = torch.sigmoid(logits) # [0,1]
         # r_hat = torch.tanh(logits).detach().cpu().numpy()  # [-1,1]
-        r_hat = -torch.sigmoid(logits).detach().cpu().numpy()  # [-1,0]
+        r_hat = torch.sigmoid(logits).detach().cpu().numpy()-1  # [-1,0]
         return r_hat
 
     def train_reward_model_celoss(self, dataset, batch_size=128, epochs=100, patience=10):
 
         # Convert transitions and labels into PyTorch tensors
-        transition_pairs = torch.tensor(dataset['transition_pairs'], dtype=torch.float32).to(self.cfg.device)  # (5366, 2, 39)
-        labels_ = torch.tensor(dataset['labels'], dtype=torch.long).to(self.cfg.device)  # (5366,)
+        transition_pairs = torch.tensor(dataset['transition_pairs'], dtype=torch.float32).to(self.cfg.cuda)  # (5366, 2, 39)
+        labels_ = torch.tensor(dataset['labels'], dtype=torch.long).to(self.cfg.cuda)  # (5366,)
         # print("transition_pair.shape", transition_pairs.shape) [5366,2,39]
         # print("labels.shape", labels.shape) [5366,1]
 
@@ -467,8 +467,8 @@ class RewardModel:
         # Create reward model
         reward_model = self.reward_model
         # Convert transitions and labels into PyTorch tensors
-        transition_pairs = torch.tensor(dataset['transition_pairs'], dtype=torch.float32).to(self.cfg.device)  # (N, 2, 39)
-        labels = torch.tensor(dataset['labels'], dtype=torch.float32).to(self.cfg.device)  # (N,)
+        transition_pairs = torch.tensor(dataset['transition_pairs'], dtype=torch.float32).to(self.cfg.cuda)  # (N, 2, 39)
+        labels = torch.tensor(dataset['labels'], dtype=torch.float32).to(self.cfg.cuda)  # (N,)
 
         # Create DataLoader for batching
         data = TensorDataset(transition_pairs, labels)
@@ -588,7 +588,7 @@ class RewardModel:
         self.reward_model.cpu()
         torch.save(self.reward_model.state_dict(), path)
         # Optionally, move it back to GPU
-        self.reward_model.to(self.cfg.device)
+        self.reward_model.to(self.cfg.cuda)
         # print("the reward model is saved")
 
 

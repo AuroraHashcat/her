@@ -16,12 +16,12 @@ import torch
 # PS: wandb记录的表名需要手动改。在wandb.init和ddpg_agent.py里。savemodel+seed
 import design_env
 gy = False
-log = False
+log = True
 test = False
 show = False
 her = True
 
-# --reward_model --cuda --smooth_label --random_data --bceloss
+# python train.py --reward_model --cuda cuda:2 --smooth_label --random_data --bceloss
 
 if(log == True and MPI.COMM_WORLD.Get_rank() == 0):
     import wandb
@@ -31,7 +31,7 @@ if(log == True and MPI.COMM_WORLD.Get_rank() == 0):
     os.environ["WANDB_API_KEY"] = "9d317e91d5b56a3aa6f1fe7463d10fa81824ed45"
     wandb.login()
     wandb.init(
-        project="HER", name="ours_ant_reacher_seed_1",group="ours_ant_reacher"
+        project="HER", name="apo_ant_reacher_seed_1",group="apo_ant_reacher"
     )
     os.environ["WANDB_MODE"] = "offline"
 
@@ -48,15 +48,16 @@ def get_env_params(env):
 
 def launch(args):
     # create the ddpg_agent
-    if (gy == True):
+    random.seed(args.seed + MPI.COMM_WORLD.Get_rank())
+    np.random.seed(args.seed + MPI.COMM_WORLD.Get_rank())
+    torch.manual_seed(args.seed + MPI.COMM_WORLD.Get_rank())
+    if args.cuda:
+        torch.cuda.manual_seed(args.seed + MPI.COMM_WORLD.Get_rank())
+
+    if gy == True:
         env = gym.make(args.env_name)
         # set random seeds for reproduce
         env.seed(args.seed + MPI.COMM_WORLD.Get_rank())
-        random.seed(args.seed + MPI.COMM_WORLD.Get_rank())
-        np.random.seed(args.seed + MPI.COMM_WORLD.Get_rank())
-        torch.manual_seed(args.seed + MPI.COMM_WORLD.Get_rank())
-        if args.cuda:
-            torch.cuda.manual_seed(args.seed + MPI.COMM_WORLD.Get_rank())
         # get the environment parameters
         env_params = get_env_params(env)
     else:
