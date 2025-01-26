@@ -21,6 +21,7 @@ test = False
 show = False
 her = True
 
+# --reward_model --cuda --smooth_label --random_data --bceloss
 
 if(log == True and MPI.COMM_WORLD.Get_rank() == 0):
     import wandb

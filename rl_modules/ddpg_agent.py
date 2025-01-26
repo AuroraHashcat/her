@@ -1,4 +1,5 @@
 import copy
+import random
 
 import torch
 import os
@@ -14,6 +15,9 @@ import wandb
 import time
 from llama.llama3_test import generator_four, check_quality, generator_reacher
 import json
+
+# reward model
+from reward_model.train_reward_model import RewardModel
 
 """
 ddpg with HER (MPI-version)
@@ -81,6 +85,10 @@ class ddpg_agent:
         # self.g_norm.std = g_std
 
         # self.actor_network.load_state_dict(actor_state_dict)
+        state_dim = self.env.initial_state_space.shape[0]
+        goal_dim = self.env.end_goal_dim - 1  # 只保留目标的两位坐标(x,y)
+        action_dim = self.env.action_dim
+        self.reward_model = RewardModel(state_dim, action_dim, goal_dim, args)
 
         self.goal_array = []
         self.relabel_temp = {}
@@ -165,13 +173,82 @@ class ddpg_agent:
 
         return goal_status, reward, goal_for_transition
 
+    def learn_reward_model(self, reward_model_path):
+        # 1) construct preference dataset
+        preference_pair = self.reward_model.construct_pbrl_data()
+
+        # 2) train reward model
+        print("the reward model is start to update!")
+        if self.args.bceloss:
+            self.reward_model.train_reward_model_bceloss(preference_pair, reward_model_path)
+        elif self.args.celoss:
+            self.reward_model.train_reward_model_celoss(preference_pair)
+        self.reward_model.save(reward_model_path)
+
+    def test_reward_model(self):
+        # with open(test_path, 'rb') as f:
+        #     test_set = pickle.load(f)
+        #     print(f"test reward model, and the test_set is {len(test_set)}")
+
+        test_set = self.test_data_for_rm
+        print(f"test reward model, and the test_set is {len(test_set)}")
+
+        sampled_trajectories = random.sample(test_set, 1)
+        total_reward = 0
+        i = 0
+
+        for trajectory in sampled_trajectories:
+            reward_sum = 0
+            for eff_transitions in trajectory:
+                # eff_transitions = [lst[:3] for lst in transition]
+                state = np.array(eff_transitions[0])
+                # print(state)
+                action = np.array(eff_transitions[1])
+                # print(action)
+                goal = np.array(eff_transitions[2])
+                # print(goal)
+                sga_t = np.concatenate([state, goal, action], axis=-1)
+                sga_t = np.array(sga_t)
+                reward_hat = self.reward_model.r_hat(sga_t)
+                # print(reward_hat)
+                reward_sum += reward_hat
+                # print(f"Transition: {eff_transitions[i]}, Reward Hat: {reward_hat}")
+                # print(f"Reward Hat: {reward_hat}")
+                # wandb.log({"reward_hat": reward_hat}
+
+            average_reward = reward_sum / len(trajectory)
+            # print(f"第{i}条trajectory的reward_sum_average", average_reward)
+            i += 1
+            total_reward += average_reward
+        total_average_reward = total_reward / 1
+        print(f"{len(sampled_trajectories)}条sampled_trajectories的average_reward", total_average_reward)
+
+        return total_average_reward
+
     def learn(self,log,show):
         # start to collect samples
         for epoch in range(self.args.n_epochs):    #1000
             if (self.test == False):
-                for _ in range(self.args.n_cycles):      #100    episode
+                for cycle in range(self.args.n_cycles):      #100    episode
                     mb_obs, mb_ag, mb_g, mb_actions = [], [], [], []
                     for _ in range(self.args.num_rollouts_per_mpi):  #1
+
+                        # update reward model
+                        if self.args.reward_model:
+                            if cycle % self.args.rm_update_freq == 0 and self.train_traj_num >= self.args.rm_update_traj_num:  # 10
+                                print(
+                                    f"we have {self.train_traj_num} train_set and {self.test_traj_num} test_set so far.")
+
+                                # learn reward model
+                                print("\nBatch:", epoch, "Episode:", cycle, "start update reward model network")
+                                rm_path = "/saved_models/reward_model/rm_model.pt"
+                                self.learn_reward_model(rm_path)
+
+                                if self.test_traj_num >= 1:
+                                    # test reward model
+                                    self.test_reward = self.test_reward_model()
+
+
                         # reset the rollouts
                         ep_obs, ep_ag, ep_g, ep_actions = [], [], [], []
                         # reset the environment

@@ -42,7 +42,16 @@ def get_args():
     parser.add_argument('--demo-length', type=int, default=20, help='the demo length')
     parser.add_argument('--cuda', action='store_true', help='if use gpu do the acceleration')
 
+    parser.add_argument('--reward_model', action='store_true', help='strict_label')
+    parser.add_argument('--rm_update_freq', type=int, default=5, help='rm_update_freq')
+    parser.add_argument('--rm_update_traj_num', type=int, default=10, help='rm_update_traj_num')
 
+    parser.add_argument('--strict_label', action='store_true', help='strict_label')
+    parser.add_argument('--smooth_label', action='store_true', help='smooth_label')
+    parser.add_argument('--smooth_label_info', action='store_true', help='smooth_label_info')
+    parser.add_argument('--random_data', action='store_true', help='random_data')
+    parser.add_argument('--celoss', action='store_true', help='celoss')
+    parser.add_argument('--bceloss', action='store_true', help='bceloss')
     args = parser.parse_args()
 
     return args

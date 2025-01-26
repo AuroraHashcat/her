@@ -90,7 +90,7 @@ class RewardModel:
     def construct_reward_predict(self):
         model = nn.Sequential(*gen_net(in_size=self.ds + self.da + self.dg,
                                        out_size=1, H=self.reward_model_H, n_layers=self.reward_model_layers,
-                                       activation=self.activation)).float().to(self.cfg.device)
+                                       activation=self.activation)).float().to(self.cfg.cuda)
 
         self.reward_model = model
         self.paramlst.extend(model.parameters())
