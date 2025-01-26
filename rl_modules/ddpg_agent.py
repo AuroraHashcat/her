@@ -10,7 +10,7 @@ from mpi_utils.normalizer import normalizer
 from her_modules.her import her_sampler
 import wandb
 import time
-#from llama.llama3_test import generator, check_quality
+from llama.llama3_test import generator_four, check_quality
 import json
 
 """
@@ -55,7 +55,8 @@ class ddpg_agent:
             self.her_module = her_sampler(self.args.replay_strategy, self.args.replay_k, self.env.sparse_reward)
         
         # create the replay buffer
-        self.buffer = replay_buffer(self.env_params, self.args.buffer_size, self.her_module.sample_her_transitions,self.gy,self.her)
+        #self.buffer = replay_buffer(self.env_params, self.args.buffer_size, self.her_module.sample_her_transitions,self.gy,self.her)
+        self.buffer = replay_buffer(self.env_params, self.args.buffer_size, self.her_module.sample_subgoal_transitions,self.gy,self.her)
         # create the normalizer
         self.o_norm = normalizer(size=env_params['obs'], default_clip_range=self.args.clip_range)
         self.g_norm = normalizer(size=env_params['goal'], default_clip_range=self.args.clip_range)
@@ -78,6 +79,35 @@ class ddpg_agent:
         # self.g_norm.std = g_std
 
         # self.actor_network.load_state_dict(actor_state_dict)
+
+    def llm_choose_subgoal(self, position):
+
+        # reset subgoal_num
+        subgoal_num = None
+
+        """use llama-3.1-8B-Instruct to select subgoals"""
+        while True:
+            start_time = time.time()
+            try:
+                messages, llm_output = generator_four(position)
+                epsilon = np.random.uniform(0, 1)
+                if (epsilon < 0.3):
+                    llm_output = check_quality(messages, llm_output)
+                end_time = time.time()
+                llm_generated_time = end_time - start_time
+                llm_output = json.loads(llm_output)
+                if isinstance(llm_output, list) and all(
+                        isinstance(coord, list) and len(coord) == 2 for coord in llm_output) and len(
+                        llm_output) <= 10:
+                    subgoal_num = len(llm_output)
+                    break  # 如果所有检查都通过，退出循环
+            except (json.JSONDecodeError, AssertionError) as e:
+                print(f"Output '{self.llm_output}' does not meet the criteria. Regenerating...")
+
+        print("llm output:", llm_output)
+        print("the number of subgoals:", subgoal_num)
+        return llm_output, llm_generated_time
+
 
     def learn(self,log,show):
         # start to collect samples
@@ -118,7 +148,10 @@ class ddpg_agent:
                             g = self.env.get_next_goal(self.test)
                             g = self.env.project_state_to_end_goal(self.env.sim, g)
                             obs = self.env.reset_sim(g)
-                            ag = self.env.project_state_to_end_goal(self.env.sim,obs) 
+                            ag = self.env.project_state_to_end_goal(self.env.sim,obs)
+                            # subgoals = [[1,1],[2,2]]
+                            llm_input = "start point" + str(np.round(ag)) + " " + "end point" + str(np.round(g))
+                            subgoals, time = self.llm_choose_subgoal(llm_input)
                             for t in range(self.env_params['max_timesteps']):
                                 action = self.env.action_space.sample()
                                 obs_new = self.env.execute_action(action)
@@ -144,12 +177,12 @@ class ddpg_agent:
                     mb_g = np.array(mb_g)
                     mb_actions = np.array(mb_actions)
                     # store the episodes
-                    self.buffer.store_episode([mb_obs, mb_ag, mb_g, mb_actions])
+                    self.buffer.store_episode([mb_obs, mb_ag, mb_g, mb_actions,subgoals])
                     #relabel
-                    self._update_normalizer([mb_obs, mb_ag, mb_g, mb_actions])
+                    self._update_normalizer([mb_obs, mb_ag, mb_g, mb_actions,subgoals])
                     for _ in range(self.args.n_batches):
                         # train the network
-                        self._update_network(log)
+                        self._update_network(log,subgoals)
                     # soft update
                     self._soft_update_target_network(self.actor_target_network, self.actor_network)
                     self._soft_update_target_network(self.critic_target_network, self.critic_network)
@@ -160,10 +193,10 @@ class ddpg_agent:
             if MPI.COMM_WORLD.Get_rank() == 0:
                 print('[{}] epoch is: {}, eval success rate is: {:.3f}'.format(datetime.now(), epoch, success_rate))
                 if (log == True):
-                    wandb.log({"AntReacher/success rate": success_rate})
+                    wandb.log({"AntWShape/success rate": success_rate})
                 if (not self.test):
                     torch.save([self.o_norm.mean, self.o_norm.std, self.g_norm.mean, self.g_norm.std, self.actor_network.state_dict()], \
-                            self.model_path + '/apo_sparse_model_seed5.pt')
+                            self.model_path + '/apo_sparse_model_seed4.pt')
 
     # pre_process the inputs
     def _preproc_inputs(self, obs, g):
@@ -191,7 +224,7 @@ class ddpg_agent:
 
     # update the normalizer
     def _update_normalizer(self, episode_batch):
-        mb_obs, mb_ag, mb_g, mb_actions = episode_batch
+        mb_obs, mb_ag, mb_g, mb_actions,subgoals = episode_batch
         mb_obs_next = mb_obs[:, 1:, :]
         mb_ag_next = mb_ag[:, 1:, :]
         # get the number of normalization transitions
@@ -203,8 +236,10 @@ class ddpg_agent:
                        'actions': mb_actions, 
                        'obs_next': mb_obs_next,
                        'ag_next': mb_ag_next,
+                       'subgoals':subgoals
                        }
-        transitions = self.her_module.sample_her_transitions(buffer_temp, num_transitions,self.gy,self.her)
+        # transitions = self.her_module.sample_her_transitions(buffer_temp, num_transitions,self.gy,self.her)
+        transitions = self.her_module.sample_subgoal_transitions(buffer_temp, num_transitions)
         obs, g = transitions['obs'], transitions['g']
         # pre process the obs and g
         transitions['obs'], transitions['g'] = self._preproc_og(obs, g)
@@ -226,9 +261,9 @@ class ddpg_agent:
             target_param.data.copy_((1 - self.args.polyak) * param.data + self.args.polyak * target_param.data)
 
     # update the network
-    def _update_network(self,log):
+    def _update_network(self,log,subgoals):
         # sample the episodes
-        transitions = self.buffer.sample(self.args.batch_size)   #256
+        transitions = self.buffer.sample(self.args.batch_size,subgoals)   #256
         # pre-process the observation and goal
         o, o_next, g = transitions['obs'], transitions['obs_next'], transitions['g']
         transitions['obs'], transitions['g'] = self._preproc_og(o, g)

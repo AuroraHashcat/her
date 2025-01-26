@@ -58,7 +58,7 @@ def design_env(model_name,show):
     goal_space_train = [[-max_range,max_range],[-max_range,max_range],[0.45,0.55]]
     goal_space_test = [[-max_range,max_range],[-max_range,max_range],[0.45,0.55]]
 
-    project_state_to_end_goal = lambda sim, state: state[:3]
+    project_state_to_end_goal = lambda sim,state: state[:2]
 
     len_threshold = 0.4
     height_threshold = 0.2

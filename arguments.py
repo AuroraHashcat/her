@@ -8,13 +8,13 @@ Here are the param for the training
 def get_args():
     parser = argparse.ArgumentParser()
     # the environment setting
-    parser.add_argument('--env-name', type=str, default='ant_s_shape', help='the environment name')
+    parser.add_argument('--env-name', type=str, default='ant_four_rooms', help='the environment name')
 
     parser.add_argument('--n-epochs', type=int, default=500, help='the number of epochs to train the agent')  #500*100
 
     parser.add_argument('--n-cycles', type=int, default=100, help='the times to collect samples per epoch')
 
-    parser.add_argument('--seed', type=int, default=1, help='random seed')
+    parser.add_argument('--seed', type=int, default=4, help='random seed')
 
     parser.add_argument('--num-rollouts-per-mpi', type=int, default=1, help='the rollouts per mpi')
 

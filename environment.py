@@ -68,6 +68,24 @@ class Environment():
 
         return rewards
 
+    def sparse_reward(self, state, end_goal):
+
+        goal_achieved = True
+        state = state[:2]
+
+        # proj_end_goal = project_state_to_end_goal(self.sim,state)
+        for j in range(len(state)):  # 检查每个维度是否满足阈值
+            if np.abs(end_goal[j] - state[j]) > self.end_goal_thresholds[j]:
+                goal_achieved = False
+                break
+
+        if goal_achieved:
+            reward = 10
+        else:
+            reward = -1
+
+        return reward, goal_achieved
+
 
     def dense_reward(self, states, end_goals):
 

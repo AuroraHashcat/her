@@ -16,7 +16,7 @@ import torch
 # PS: wandb记录的表名需要手动改。在wandb.init和ddpg_agent.py里。savemodel+seed
 import design_env
 gy = False
-log = True
+log = False
 test = False
 show = False
 her = True
@@ -26,7 +26,7 @@ if(log == True and MPI.COMM_WORLD.Get_rank() == 0):
     os.environ["WANDB_API_KEY"] = "7345a4ba788b2d78ab6a78d185784b2ea818317e"
     wandb.login()
     wandb.init(
-        project="HER", name="HER_sparse_reward_AntSShape_seed1",group="AntSShape"
+        project="HER", name="HER_sparse_reward_AntWShape_seed4",group="AntWShape"
     )
     os.environ["WANDB_MODE"] = "offline"
 
