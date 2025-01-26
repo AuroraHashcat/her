@@ -1,15 +1,18 @@
 import numpy as np
 import random
 
+
 class her_sampler:
-    def __init__(self, replay_strategy, replay_k, reward_func=None):
+    def __init__(self, replay_strategy, replay_k, args,env, reward_func=None):
         self.replay_strategy = replay_strategy
         self.replay_k = replay_k
+        self.args = args
         if self.replay_strategy == 'future':
             self.future_p = 1 - (1. / (1 + replay_k))
         else:
             self.future_p = 0
         self.reward_func = reward_func
+        self.env = env
 
 
     def sample_her_transitions(self, episode_batch, batch_size_in_transitions,gy,her):
@@ -22,7 +25,7 @@ class her_sampler:
         transitions = {key: episode_batch[key][episode_idxs, t_samples].copy() for key in episode_batch.keys()}
         # her idx
 
-        if (her):
+        if her:
             her_indexes = np.where(np.random.uniform(size=batch_size) < self.future_p)
             future_offset = np.random.uniform(size=batch_size) * (T - t_samples)
             future_offset = future_offset.astype(int)
@@ -31,10 +34,11 @@ class her_sampler:
             future_ag = episode_batch['ag'][episode_idxs[her_indexes], future_t]
             transitions['g'][her_indexes] = future_ag
             # to get the params to re-compute reward
-        # if(gy == True):
-        #     transitions['r'] = np.expand_dims(self.reward_func(transitions['ag_next'], transitions['g'], None), 1)
-        # else:
-        transitions['r'] = np.expand_dims(self.reward_func(transitions['ag_next'], transitions['g']), 1)
+
+        if self.args.reward_model_relabel:
+            transitions['r'] = np.expand_dims(self.reward_func.r_hat_batch(np.concatenate([transitions['obs'], transitions['g'],transitions['actions']]), axis=-1), 1)
+        else:
+            transitions['r'] = np.expand_dims(self.env.sparse_reward(transitions['ag_next'], transitions['g']), 1)
         transitions = {k: transitions[k].reshape(batch_size, *transitions[k].shape[1:]) for k in transitions.keys()}
         return transitions
 

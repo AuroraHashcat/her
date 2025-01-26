@@ -54,15 +54,21 @@ class ddpg_agent:
         self.actor_optim = torch.optim.Adam(self.actor_network.parameters(), lr=self.args.lr_actor)
         self.critic_optim = torch.optim.Adam(self.critic_network.parameters(), lr=self.args.lr_critic)
 
+        # self.actor_network.load_state_dict(actor_state_dict)
+        state_dim = self.env.initial_state_space.shape[0]
+        goal_dim = self.env.end_goal_dim - 1  # 只保留目标的两位坐标(x,y)
+        action_dim = self.env.action_dim
+        self.reward_model = RewardModel(state_dim, action_dim, goal_dim, args)
+
         # her sampler
         if (self.gy == True):
-            self.her_module = her_sampler(self.args.replay_strategy, self.args.replay_k, self.env.compute_reward)
+            self.her_module = her_sampler(self.args.replay_strategy, self.args.replay_k ,self.args,self.env,self.env.compute_reward)
         else:
-            self.her_module = her_sampler(self.args.replay_strategy, self.args.replay_k, self.env.sparse_reward)
+            self.her_module = her_sampler(self.args.replay_strategy, self.args.replay_k, self.args , self.env,self.reward_model)
         
         # create the replay buffer
-        #self.buffer = replay_buffer(self.env_params, self.args.buffer_size, self.her_module.sample_her_transitions,self.gy,self.her)
-        self.buffer = replay_buffer(self.env_params, self.args.buffer_size, self.her_module.sample_subgoal_transitions,self.gy,self.her)
+        self.buffer = replay_buffer(self.env_params, self.args.buffer_size, self.her_module.sample_her_transitions,self.gy,self.her)
+        # self.buffer = replay_buffer(self.env_params, self.args.buffer_size, self.her_module.sample_subgoal_transitions,self.gy,self.her)
         # create the normalizer
         self.o_norm = normalizer(size=env_params['obs'], default_clip_range=self.args.clip_range)
         self.g_norm = normalizer(size=env_params['goal'], default_clip_range=self.args.clip_range)
@@ -84,11 +90,7 @@ class ddpg_agent:
         # self.g_norm.mean = g_mean
         # self.g_norm.std = g_std
 
-        # self.actor_network.load_state_dict(actor_state_dict)
-        state_dim = self.env.initial_state_space.shape[0]
-        goal_dim = self.env.end_goal_dim - 1  # 只保留目标的两位坐标(x,y)
-        action_dim = self.env.action_dim
-        self.reward_model = RewardModel(state_dim, action_dim, goal_dim, args)
+
 
         self.goal_array = []
         self.relabel_temp = {}
@@ -248,6 +250,7 @@ class ddpg_agent:
                                     # test reward model
                                     self.test_reward = self.test_reward_model()
 
+                                self.args.reward_model_relabel = True
 
                         # reset the rollouts
                         ep_obs, ep_ag, ep_g, ep_actions = [], [], [], []
@@ -413,12 +416,12 @@ class ddpg_agent:
                     mb_g = np.array(mb_g)
                     mb_actions = np.array(mb_actions)
                     # store the episodes
-                    self.buffer.store_episode([mb_obs, mb_ag, mb_g, mb_actions,subgoals])
+                    self.buffer.store_episode([mb_obs, mb_ag, mb_g, mb_actions])
                     #relabel
-                    self._update_normalizer([mb_obs, mb_ag, mb_g, mb_actions,subgoals])
+                    self._update_normalizer([mb_obs, mb_ag, mb_g, mb_actions])
                     for _ in range(self.args.n_batches):
                         # train the network
-                        self._update_network(log,subgoals)
+                        self._update_network(log)
                     # soft update
                     self._soft_update_target_network(self.actor_target_network, self.actor_network)
                     self._soft_update_target_network(self.critic_target_network, self.critic_network)
@@ -460,22 +463,20 @@ class ddpg_agent:
 
     # update the normalizer
     def _update_normalizer(self, episode_batch):
-        mb_obs, mb_ag, mb_g, mb_actions,subgoals = episode_batch
+        mb_obs, mb_ag, mb_g, mb_actions = episode_batch
         mb_obs_next = mb_obs[:, 1:, :]
         mb_ag_next = mb_ag[:, 1:, :]
         # get the number of normalization transitions
         num_transitions = mb_actions.shape[1]
         # create the new buffer to store them
-        buffer_temp = {'obs': mb_obs, 
+        buffer_temp = {'obs': mb_obs,
                        'ag': mb_ag,
-                       'g': mb_g, 
-                       'actions': mb_actions, 
+                       'g': mb_g,
+                       'actions': mb_actions,
                        'obs_next': mb_obs_next,
                        'ag_next': mb_ag_next,
-                       'subgoals':subgoals
                        }
-        # transitions = self.her_module.sample_her_transitions(buffer_temp, num_transitions,self.gy,self.her)
-        transitions = self.her_module.sample_subgoal_transitions(buffer_temp, num_transitions)
+        transitions = self.her_module.sample_her_transitions(buffer_temp, num_transitions)
         obs, g = transitions['obs'], transitions['g']
         # pre process the obs and g
         transitions['obs'], transitions['g'] = self._preproc_og(obs, g)
@@ -497,9 +498,9 @@ class ddpg_agent:
             target_param.data.copy_((1 - self.args.polyak) * param.data + self.args.polyak * target_param.data)
 
     # update the network
-    def _update_network(self,log,subgoals):
+    def _update_network(self,log):
         # sample the episodes
-        transitions = self.buffer.sample(self.args.batch_size,subgoals)   #256
+        transitions = self.buffer.sample(self.args.batch_size)   #256
         # pre-process the observation and goal
         o, o_next, g = transitions['obs'], transitions['obs_next'], transitions['g']
         transitions['obs'], transitions['g'] = self._preproc_og(o, g)

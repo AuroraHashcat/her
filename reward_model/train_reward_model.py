@@ -333,7 +333,8 @@ class RewardModel:
         # return the reward prediction value
         logits = self.reward_model(torch.from_numpy(x).float().to(self.cfg.device))
         # probs = torch.sigmoid(logits) # [0,1]
-        r_hat = torch.tanh(logits).detach().cpu().numpy() # [-1,1]
+        # r_hat = torch.tanh(logits).detach().cpu().numpy() # [-1,1]
+        r_hat = -torch.sigmoid(logits).detach().cpu().numpy() # [-1,0]
         return r_hat
 
     def r_hat_batch(self, x):
@@ -341,7 +342,8 @@ class RewardModel:
         # but I don't understand how the normalization should be happening right now :(
         logits = self.reward_model(torch.from_numpy(x).float().to(self.cfg.device))
         # probs = torch.sigmoid(logits) # [0,1]
-        r_hat = torch.tanh(logits).detach().cpu().numpy()  # [-1,1]
+        # r_hat = torch.tanh(logits).detach().cpu().numpy()  # [-1,1]
+        r_hat = -torch.sigmoid(logits).detach().cpu().numpy()  # [-1,0]
         return r_hat
 
     def train_reward_model_celoss(self, dataset, batch_size=128, epochs=100, patience=10):
