@@ -13,26 +13,51 @@ def design_env(model_name,show):
 
     #model_name: ant_reacher, ant_four_rooms, ant_s_shape, ant_w_shape, ant_obstacle_1, ant_obstacle_2
     model_name = model_name + ".xml"
-        
-    max_actions = 700
-    timesteps_per_action = 15 
 
-    initial_joint_pos = np.array([0, 0, 0.55, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, 0.0, -1.0, 0.0, 1.0])
-    initial_joint_pos = np.reshape(initial_joint_pos,(len(initial_joint_pos),1))
-    initial_joint_ranges = np.concatenate((initial_joint_pos,initial_joint_pos),1)
-    initial_joint_ranges[0] = np.array([-6,6])
-    initial_joint_ranges[1] = np.array([-6,6])
-    initial_state_space = np.concatenate((initial_joint_ranges,np.zeros((len(initial_joint_ranges)-1,2))),0)
+    if model_name == "ant_reacher":
+        max_actions = 800
+        timesteps_per_action = 15
 
-    max_range = 6
-    goal_space_train = [[-max_range,max_range],[-max_range,max_range],[0.45,0.55]]
-    goal_space_test = [[-max_range,max_range],[-max_range,max_range],[0.45,0.55]]
+        initial_joint_pos = np.array([0, 0, 0.55, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, 0.0, -1.0, 0.0, 1.0])
+        initial_joint_pos = np.reshape(initial_joint_pos, (len(initial_joint_pos), 1))
+        initial_joint_ranges = np.concatenate((initial_joint_pos, initial_joint_pos), 1)
+        initial_joint_ranges[0] = np.array([-9.5, 9.5])
+        initial_joint_ranges[1] = np.array([-9.5, 9.5])
 
-    project_state_to_end_goal = lambda sim,state: state[:2]
+        # Cocatenate velocity ranges
+        initial_state_space = np.concatenate((initial_joint_ranges, np.zeros((len(initial_joint_ranges) - 1, 2))), 0)
 
-    len_threshold = 0.4
-    height_threshold = 0.2
-    end_goal_thresholds = np.array([len_threshold, len_threshold, height_threshold])
+        max_range = 9.5
+        goal_space_train = [[-max_range, max_range], [-max_range, max_range], [0.45, 0.55]]
+        goal_space_test = [[-max_range, max_range], [-max_range, max_range], [0.45, 0.55]]
+
+        project_state_to_end_goal = lambda sim, state: state[:2]
+
+        len_threshold = 0.5
+        height_threshold = 0.2
+        end_goal_thresholds = np.array([len_threshold, len_threshold, height_threshold])
+
+
+    else:
+        max_actions = 700
+        timesteps_per_action = 15
+
+        initial_joint_pos = np.array([0, 0, 0.55, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, 0.0, -1.0, 0.0, 1.0])
+        initial_joint_pos = np.reshape(initial_joint_pos,(len(initial_joint_pos),1))
+        initial_joint_ranges = np.concatenate((initial_joint_pos,initial_joint_pos),1)
+        initial_joint_ranges[0] = np.array([-6,6])
+        initial_joint_ranges[1] = np.array([-6,6])
+        initial_state_space = np.concatenate((initial_joint_ranges,np.zeros((len(initial_joint_ranges)-1,2))),0)
+
+        max_range = 6
+        goal_space_train = [[-max_range,max_range],[-max_range,max_range],[0.45,0.55]]
+        goal_space_test = [[-max_range,max_range],[-max_range,max_range],[0.45,0.55]]
+
+        project_state_to_end_goal = lambda sim,state: state[:2]
+
+        len_threshold = 0.4
+        height_threshold = 0.2
+        end_goal_thresholds = np.array([len_threshold, len_threshold, height_threshold])
 
 
     env = Environment(model_name, goal_space_train, goal_space_test, project_state_to_end_goal, end_goal_thresholds, 

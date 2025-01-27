@@ -22,7 +22,7 @@ show = False
 her = True
 
 # ant_reacher: python train.py --cuda cuda:1 --seed 1
-# ant_four_rooms: python train.py --cuda cuda:3 --env-name ant_four_rooms --seed 1
+# ant_four_rooms: python train.py --cuda cuda:1 --env-name ant_four_rooms --seed 1
 
 
 if(log == True and MPI.COMM_WORLD.Get_rank() == 0):
@@ -33,7 +33,7 @@ if(log == True and MPI.COMM_WORLD.Get_rank() == 0):
     os.environ["WANDB_API_KEY"] = "9d317e91d5b56a3aa6f1fe7463d10fa81824ed45"
     wandb.login()
     wandb.init(
-        project="HER", name="apo_ant_4rooms_seed_1",group="apo_ant_4rooms"
+        project="HER", name="apo_ant_4rooms_seed_4",group="apo_ant_4rooms"
     )
     os.environ["WANDB_MODE"] = "offline"
 
