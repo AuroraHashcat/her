@@ -259,167 +259,141 @@ class ddpg_agent:
                         self.goal_array = []
 
                         # reset the environment
-                        if (self.gy == True):
-                            observation = self.env.reset()
-                            obs = observation['observation']
-                            ag = observation['achieved_goal']
-                            g = observation['desired_goal']
-                            # start to collect samples
-                            for t in range(self.env_params['max_timesteps']):    #800
-                                with torch.no_grad():
-                                    input_tensor = self._preproc_inputs(obs, g)
-                                    pi = self.actor_network(input_tensor)
-                                    action = self._select_actions(pi)
-                                # feed the actions into the environment
-                                observation_new, _, _, info = self.env.step(action)
-                                obs_new = observation_new['observation']
-                                ag_new = observation_new['achieved_goal']
-                                ep_obs.append(obs.copy())
-                                ep_ag.append(ag.copy())
-                                ep_g.append(g.copy())
-                                ep_actions.append(action.copy())
-                                # re-assign the observation
-                                obs = obs_new
-                                ag = ag_new
+                        print("\nBatch:", epoch, "Episode:", cycle)
+                        achieved_subgoal_num = 0
+                        relabel_clip = False
+                        done = False
+                        self.relabel_temp = {}
+                        self.transition = []
+
+                        g = self.env.get_next_goal(self.test)
+                        g = self.env.project_state_to_end_goal(self.env.sim, g)
+                        self.goal_array.append(g)
+                        print("Next End Goal: ", self.goal_array[0])
+                        obs = self.env.reset_sim(g)
+                        print("Initial Ant Position: ", obs[:3])
+                        ag = self.env.project_state_to_end_goal(self.env.sim,obs)
+
+
+                        self.llm_input = "start point" + str(np.round(ag)) + " " + "end point" + str(np.round(g))
+                        self.goal_array, time = self.llm_choose_subgoal(self.llm_input)
+
+                        for t in range(self.env_params['max_timesteps']):
+                            action = self.env.action_space.sample()
+                            obs_new = self.env.execute_action(action)
+                            ag_new = self.env.project_state_to_end_goal(self.env.sim,obs_new)
+
+                            goal_status, reward_relabelled, goal_relabelled = self.sparse_reward_subgoal(self.env,
+                                                                                                         obs_new,t)
+
+                            if goal_status[0]:
+                                done = True
+                            if t + 1 == self.env_params['max_timesteps']:
+                                done = True
+                                print("Out of actions (Steps: %d)" % t)
+                            # calculate reward
+                            done = float(done)
+                            done_no_max = 0 if t + 1 == self.env.max_actions else done
+
+                            if  reward_relabelled == 0:
+                                achieved_subgoal_num += 1
+                                relabel_clip = True
+                                # goal
+                                relabel_goal = goal_relabelled
+                                # index
+                                relabel_goal_index = t
+                                self.relabel_temp[f'subgoal_{achieved_subgoal_num}'] = (
+                                achieved_subgoal_num, relabel_goal, relabel_goal_index)
+
+                            self.transition.append(
+                                [obs, action, g, reward_relabelled, obs_new, done, done_no_max])
+
 
                             ep_obs.append(obs.copy())
                             ep_ag.append(ag.copy())
-                        else:
-                            print("\nBatch:", epoch, "Episode:", cycle)
-                            achieved_subgoal_num = 0
-                            relabel_clip = False
-                            done = False
-                            self.relabel_temp = {}
-                            self.transition = []
-
-                            g = self.env.get_next_goal(self.test)
-                            g = self.env.project_state_to_end_goal(self.env.sim, g)
-                            self.goal_array.append(g)
-                            print("Next End Goal: ", self.goal_array[0])
-                            obs = self.env.reset_sim(g)
-                            print("Initial Ant Position: ", obs[:3])
-                            ag = self.env.project_state_to_end_goal(self.env.sim,obs)
+                            ep_g.append(g.copy())
+                            ep_actions.append(action.copy())
+                            # re-assign the observation
+                            obs = obs_new
+                            ag = ag_new
+                            self.step += 1
+                        ep_obs.append(obs.copy())
+                        ep_ag.append(ag.copy())
 
 
-                            self.llm_input = "start point" + str(np.round(ag)) + " " + "end point" + str(np.round(g))
-                            self.goal_array, time = self.llm_choose_subgoal(self.llm_input)
+                        print("relabel temp dict: ", self.relabel_temp)
+                        """
+                        1) if done_no_max is True, there is no need for relabel.
+                        2) if done_no_max is False and no sub-goal is achieved, there is no need for relabel either. ->  add her future relabel?
+                        3) if done_no_max is False and sub-goal is True, run relabel clip: -> multiple trajectories
+                        """
+                        if done_no_max:  # -> 1) add her future relabel  2) gcsl relabel (ablation study)
+                            self.eff_traj_num += 1
+                            self.train_traj_num += 1
 
-                            for t in range(self.env_params['max_timesteps']):
-                                action = self.env.action_space.sample()
-                                obs_new = self.env.execute_action(action)
-                                ag_new = self.env.project_state_to_end_goal(self.env.sim,obs_new)
+                            for transition in self.transition:
+                                state, action, goal, reward, next_state, done, done_no_max = transition
+                                obs = np.concatenate((state, goal), axis=0)
+                                next_obs = np.concatenate((next_state, goal), axis=0)
+                                # 1) add RM buffer (s, a, g, r, done_no_max)
+                                self.reward_model.add_eff_data_sga(state, action, goal, reward, done_no_max)
 
-                                goal_status, reward_relabelled, goal_relabelled = self.sparse_reward_subgoal(self.env,
-                                                                                                             obs_new,t)
-
-                                if goal_status[0]:
-                                    done = True
-                                if t + 1 == self.env_params['max_timesteps']:
-                                    done = True
-                                    print("Out of actions (Steps: %d)" % t)
-                                # calculate reward
-                                done = float(done)
-                                done_no_max = 0 if t + 1 == self.env.max_actions else done
-
-                                if not done_no_max and (reward_relabelled == 0):
-                                    achieved_subgoal_num += 1
-                                    relabel_clip = True
-                                    # goal
-                                    relabel_goal = goal_relabelled
-                                    # index
-                                    relabel_goal_index = t
-                                    self.relabel_temp[f'subgoal_{achieved_subgoal_num}'] = (
-                                    achieved_subgoal_num, relabel_goal, relabel_goal_index)
-
-                                self.transition.append(
-                                    [obs, action, g, reward_relabelled, obs_new, done, done_no_max])
-
-
-                                ep_obs.append(obs.copy())
-                                ep_ag.append(ag.copy())
-                                ep_g.append(g.copy())
-                                ep_actions.append(action.copy())
-                                # re-assign the observation
-                                obs = obs_new
-                                ag = ag_new
-                                self.step += 1
-                            ep_obs.append(obs.copy())
-                            ep_ag.append(ag.copy())
-
-
-                            print("relabel temp dict: ", self.relabel_temp)
-                            """
-                            1) if done_no_max is True, there is no need for relabel.
-                            2) if done_no_max is False and no sub-goal is achieved, there is no need for relabel either. ->  add her future relabel?
-                            3) if done_no_max is False and sub-goal is True, run relabel clip: -> multiple trajectories
-                            """
-                            if done_no_max:  # -> 1) add her future relabel  2) gcsl relabel (ablation study)
-                                self.eff_traj_num += 1
-                                self.train_traj_num += 1
-
-                                for transition in self.transition:
-                                    state, action, goal, reward, next_state, done, done_no_max = transition
-                                    obs = np.concatenate((state, goal), axis=0)
-                                    next_obs = np.concatenate((next_state, goal), axis=0)
-                                    # 1) add RM buffer (s, a, g, r, done_no_max)
-                                    self.reward_model.add_eff_data_sga(state, action, goal, reward, done_no_max)
-
-                            elif relabel_clip:
-                                for key, (subgoal_num, goal, goal_index) in self.relabel_temp.items():
-                                    print(key, subgoal_num, goal, goal_index)
-                                    if goal_index == 0:  # if the step is 0 and the sub goal is achieved.
-                                        print("goal_index is 0, breaking out of the loop, no need for relabel.")
-                                        continue
-                                    # 1) clip transition and relabel done
-                                    self.new_transition = copy.deepcopy(
-                                        self.transition[:(goal_index + 1)])  # deepcopy创建全新的切片
-                                    self.new_transition[-1][5] = True
-                                    # done_no_max
-                                    self.new_transition[-1][6] = float(self.new_transition[-1][5])
-                                    # 2) relabel goal
-                                    for i in range(len(self.new_transition)):
-                                        self.new_transition[i][2] = goal  # 更新goal_relabelled为新的goal
-                                    # 3） recompute reward
-                                    for i in range(len(self.new_transition)):
-                                        # 此处应该测next_state和goal之间的距离阈值
-                                        if (np.absolute(self.new_transition[i][4][0] - goal[0]) <
-                                            self.env.end_goal_thresholds[
-                                                0]) and \
-                                                (np.absolute(self.new_transition[i][4][1] - goal[1]) <
-                                                 self.env.end_goal_thresholds[
-                                                     1]):
-                                            self.new_transition[i][3] = 1
-                                        else:
-                                            self.new_transition[i][3] = -1
-
-                                    self.eff_traj_num += 1
-
-                                    # store data into train/test set
-                                    # 1) test_set
-                                    if self.eff_traj_num % 10 == 9:  # train_set:test_set = 9:1
-                                        self.test_traj_num += 1
-                                        # add test data for reward model
-                                        self.test_data_for_rm.append(self.new_transition)
-
-                                    # 2) train_set
+                        elif relabel_clip:
+                            for key, (subgoal_num, goal, goal_index) in self.relabel_temp.items():
+                                print(key, subgoal_num, goal, goal_index)
+                                if goal_index == 0:  # if the step is 0 and the sub goal is achieved.
+                                    print("goal_index is 0, breaking out of the loop, no need for relabel.")
+                                    continue
+                                # 1) clip transition and relabel done
+                                self.new_transition = copy.deepcopy(
+                                    self.transition[:(goal_index + 1)])  # deepcopy创建全新的切片
+                                self.new_transition[-1][5] = True
+                                # done_no_max
+                                self.new_transition[-1][6] = float(self.new_transition[-1][5])
+                                # 2) relabel goal
+                                for i in range(len(self.new_transition)):
+                                    self.new_transition[i][2] = goal  # 更新goal_relabelled为新的goal
+                                # 3） recompute reward
+                                for i in range(len(self.new_transition)):
+                                    # 此处应该测next_state和goal之间的距离阈值
+                                    if (np.absolute(self.new_transition[i][4][0] - goal[0]) <
+                                        self.env.end_goal_thresholds[
+                                            0]) and \
+                                            (np.absolute(self.new_transition[i][4][1] - goal[1]) <
+                                             self.env.end_goal_thresholds[
+                                                 1]):
+                                        self.new_transition[i][3] = 1
                                     else:
-                                        self.train_traj_num += 1
-                                        for transition in self.new_transition:
-                                            state, action, goal, reward, next_state, done, done_no_max = transition
-                                            obs = np.concatenate((state, goal), axis=0)
-                                            next_obs = np.concatenate((next_state, goal), axis=0)
-                                            # 1) add train_set data into RM buffer (s, a, g, r, done_no_max)
-                                            self.reward_model.add_eff_data_sga(state, action, goal, reward, done_no_max)
+                                        self.new_transition[i][3] = -1
 
-                            else:
-                                for j in range(len(self.transition)):
-                                    state, action, goal, reward, next_state, done, done_no_max = self.transition[j]
-                                    # 1) add RM buffer (s, a, g, r, done)
-                                    self.reward_model.add_nor_data_sga(state, action, goal, reward, done)
+                                self.eff_traj_num += 1
 
-                            print(
-                                f"we have {self.eff_traj_num} eff_traj, {self.train_traj_num} train_set and {self.test_traj_num} test_set so far.")
-                            print()
+                                # store data into train/test set
+                                # 1) test_set
+                                if self.eff_traj_num % 10 == 9:  # train_set:test_set = 9:1
+                                    self.test_traj_num += 1
+                                    # add test data for reward model
+                                    self.test_data_for_rm.append(self.new_transition)
+
+                                # 2) train_set
+                                else:
+                                    self.train_traj_num += 1
+                                    for transition in self.new_transition:
+                                        state, action, goal, reward, next_state, done, done_no_max = transition
+                                        obs = np.concatenate((state, goal), axis=0)
+                                        next_obs = np.concatenate((next_state, goal), axis=0)
+                                        # 1) add train_set data into RM buffer (s, a, g, r, done_no_max)
+                                        self.reward_model.add_eff_data_sga(state, action, goal, reward, done_no_max)
+
+                        else:
+                            for j in range(len(self.transition)):
+                                state, action, goal, reward, next_state, done, done_no_max = self.transition[j]
+                                # 1) add RM buffer (s, a, g, r, done)
+                                self.reward_model.add_nor_data_sga(state, action, goal, reward, done)
+
+                        print(
+                            f"we have {self.eff_traj_num} eff_traj, {self.train_traj_num} train_set and {self.test_traj_num} test_set so far.")
+                        print()
 
                         mb_obs.append(ep_obs)
                         mb_ag.append(ep_ag)
