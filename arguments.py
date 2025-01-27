@@ -44,7 +44,7 @@ def get_args():
     parser.add_argument('--cuda', type=str, default='cuda:1',
                         help='Device to use for training (e.g. "cuda:0", "cuda:1", "cpu")')
 
-    parser.add_argument('--reward_model', action='store_true', help='strict_label')
+    parser.add_argument('--reward_model', action='store_false', help='strict_label')
     parser.add_argument('--reward_model_relabel', action='store_true', help='reward_model_relabel')
     parser.add_argument('--rm_update_freq', type=int, default=5, help='rm_update_freq')
     parser.add_argument('--rm_update_traj_num', type=int, default=10, help='rm_update_traj_num')
