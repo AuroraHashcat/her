@@ -163,6 +163,8 @@ class ddpg_agent:
                     reward = 0
                     print(f"steps {t}, end point is achieved, mission success")
                     goal_for_transition = self.goal_array[0]
+                    del self.goal_array[i]
+                    print("goal_array_still:", self.goal_array)
                     return goal_status, reward, goal_for_transition
                 # subgoal achieved, delete subgoal from goal_array
                 else:
@@ -245,7 +247,7 @@ class ddpg_agent:
 
                                 # learn reward model
                                 print("\nBatch:", epoch, "Episode:", cycle, "start update reward model network")
-                                rm_path = "/home/yanjy/work_project/her/saved_models/ant_reacher/rm_model_seed5.pt"
+                                rm_path = f"{self.model_path}/rm_model_seed_{self.args.seed}.pt"
                                 self.learn_reward_model(rm_path)
 
                                 if self.test_traj_num >= 1:
@@ -424,7 +426,7 @@ class ddpg_agent:
                     wandb.log({"AntReacher/success rate": success_rate},step=self.step)
                 if (not self.test):
                     torch.save([self.o_norm.mean, self.o_norm.std, self.g_norm.mean, self.g_norm.std, self.actor_network.state_dict()], \
-                            self.model_path + '/apo_sparse_model_seed5.pt')
+                             f"{self.model_path}/apo_sparse_model_seed_{self.args.seed}.pt")
 
     # pre_process the inputs
     def _preproc_inputs(self, obs, g):
