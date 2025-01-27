@@ -105,6 +105,8 @@ class ddpg_agent:
 
         self.test_data_for_rm = []
 
+        self.step = 0
+
     def llm_choose_subgoal(self, position):
 
         # reset subgoal_num
@@ -340,6 +342,7 @@ class ddpg_agent:
                                 # re-assign the observation
                                 obs = obs_new
                                 ag = ag_new
+                                self.step += 1
                             ep_obs.append(obs.copy())
                             ep_ag.append(ag.copy())
 
@@ -444,7 +447,7 @@ class ddpg_agent:
             if MPI.COMM_WORLD.Get_rank() == 0:
                 print('[{}] epoch is: {}, eval success rate is: {:.3f}'.format(datetime.now(), epoch, success_rate))
                 if (log == True):
-                    wandb.log({"Ant_reacher/success rate": success_rate})
+                    wandb.log({"AntReacher/success rate": success_rate},step=self.step)
                 if (not self.test):
                     torch.save([self.o_norm.mean, self.o_norm.std, self.g_norm.mean, self.g_norm.std, self.actor_network.state_dict()], \
                             self.model_path + '/apo_sparse_model_seed1.pt')
@@ -560,7 +563,7 @@ class ddpg_agent:
         actor_loss += self.args.action_l2 * (actions_real / self.env_params['action_max']).pow(2).mean()
         if (log == True):
             wandb.log({"AntReacher/actor_loss": actor_loss,
-                        "AntReacher/critic_loss": critic_loss})
+                        "AntReacher/critic_loss": critic_loss},step=self.step)
         # start to update the network
         self.actor_optim.zero_grad()
         actor_loss.backward()
@@ -607,7 +610,7 @@ class ddpg_agent:
                         # convert the actions
                         action = pi.detach().cpu().numpy().squeeze()
                     obs = self.env.execute_action(action)
-                    if (show):
+                    if show:
                         if(self.env.success(obs,g)):
                             break
                     else:
