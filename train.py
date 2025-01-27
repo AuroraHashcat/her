@@ -21,7 +21,7 @@ test = False
 show = False
 her = True
 
-# python train.py --cuda cuda:3 --seed:1
+# python train.py --cuda cuda:1 --seed 5
 
 if(log == True and MPI.COMM_WORLD.Get_rank() == 0):
     import wandb
@@ -31,7 +31,7 @@ if(log == True and MPI.COMM_WORLD.Get_rank() == 0):
     os.environ["WANDB_API_KEY"] = "9d317e91d5b56a3aa6f1fe7463d10fa81824ed45"
     wandb.login()
     wandb.init(
-        project="HER", name="apo_ant_reacher_seed_1",group="apo_ant_reacher"
+        project="HER", name="apo_ant_reacher_seed_5",group="apo_ant_reacher"
     )
     os.environ["WANDB_MODE"] = "offline"
 

@@ -7,7 +7,7 @@ import numpy as np
 # new
 # client = ChatWithOurServer(base_url="http://172.18.36.112:65431/v1", model='Meta-Llama-3-8B-Instruct')
 # jiangyue
-client = ChatWithOurServer(base_url="http://172.18.36.112:65433/v1", model='Llama-3.1-8B-Instruct')
+client = ChatWithOurServer(base_url="http://172.18.36.112:65432/v1", model='Llama-3.1-8B-Instruct')
 
 # chenxi
 # client = ChatWithOurServer(base_url = "http://0.0.0.0:65433/v1", model='Llama-3.1-8B-Instruct')

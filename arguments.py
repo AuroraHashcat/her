@@ -10,7 +10,7 @@ def get_args():
     # the environment setting
     parser.add_argument('--env-name', type=str, default='ant_reacher', help='the environment name')
 
-    parser.add_argument('--n-epochs', type=int, default=500, help='the number of epochs to train the agent')  #500*100
+    parser.add_argument('--n-epochs', type=int, default=50, help='the number of epochs to train the agent')  #500*100
 
     parser.add_argument('--n-cycles', type=int, default=100, help='the times to collect samples per epoch')
 
@@ -18,7 +18,7 @@ def get_args():
 
     parser.add_argument('--num-rollouts-per-mpi', type=int, default=1, help='the rollouts per mpi')
 
-    #fetch: 50*50*2   reach:50*10*2  slide 200*50*2
+    # reach:50*100*800  others:500*100*700
 
     parser.add_argument('--n-batches', type=int, default=40, help='the times to update the network')
     parser.add_argument('--save-interval', type=int, default=5, help='the interval that save the trajectory')

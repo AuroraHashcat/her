@@ -245,7 +245,7 @@ class ddpg_agent:
 
                                 # learn reward model
                                 print("\nBatch:", epoch, "Episode:", cycle, "start update reward model network")
-                                rm_path = "/home/yanjy/work_project/her/saved_models/ant_reacher/rm_model_seed1.pt"
+                                rm_path = "/home/yanjy/work_project/her/saved_models/ant_reacher/rm_model_seed5.pt"
                                 self.learn_reward_model(rm_path)
 
                                 if self.test_traj_num >= 1:
@@ -424,7 +424,7 @@ class ddpg_agent:
                     wandb.log({"AntReacher/success rate": success_rate},step=self.step)
                 if (not self.test):
                     torch.save([self.o_norm.mean, self.o_norm.std, self.g_norm.mean, self.g_norm.std, self.actor_network.state_dict()], \
-                            self.model_path + '/apo_sparse_model_seed1.pt')
+                            self.model_path + '/apo_sparse_model_seed5.pt')
 
     # pre_process the inputs
     def _preproc_inputs(self, obs, g):
