@@ -11,7 +11,7 @@ import gym
 def design_env(model_name,show):
 
 
-    #model_name: ant_reacher, pendulum, ur5, ant_four_rooms
+    #model_name: ant_reacher, ant_four_rooms, ant_s_shape, ant_w_shape, ant_obstacle_1, ant_obstacle_2
     model_name = model_name + ".xml"
         
     max_actions = 800

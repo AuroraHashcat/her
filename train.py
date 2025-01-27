@@ -21,7 +21,7 @@ test = False
 show = False
 her = True
 
-# python train.py --reward_model --cuda cuda:2 --smooth_label --random_data --bceloss
+# python train.py --reward_model --cuda cuda:3
 
 if(log == True and MPI.COMM_WORLD.Get_rank() == 0):
     import wandb

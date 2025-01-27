@@ -24,16 +24,14 @@ class her_sampler:
         t_samples = np.random.randint(T, size=batch_size)
         transitions = {key: episode_batch[key][episode_idxs, t_samples].copy() for key in episode_batch.keys()}
         # her idx
-
-        if her:
-            her_indexes = np.where(np.random.uniform(size=batch_size) < self.future_p)
-            future_offset = np.random.uniform(size=batch_size) * (T - t_samples)
-            future_offset = future_offset.astype(int)
-            future_t = (t_samples + 1 + future_offset)[her_indexes]
-            # replace go with achieved goal
-            future_ag = episode_batch['ag'][episode_idxs[her_indexes], future_t]
-            transitions['g'][her_indexes] = future_ag
-            # to get the params to re-compute reward
+        her_indexes = np.where(np.random.uniform(size=batch_size) < self.future_p)
+        future_offset = np.random.uniform(size=batch_size) * (T - t_samples)
+        future_offset = future_offset.astype(int)
+        future_t = (t_samples + 1 + future_offset)[her_indexes]
+        # replace go with achieved goal
+        future_ag = episode_batch['ag'][episode_idxs[her_indexes], future_t]
+        transitions['g'][her_indexes] = future_ag
+        # to get the params to re-compute reward
 
         if self.args.reward_model_relabel:
             # print(transitions['obs'].shape)  # 应该是 (N, 29)
@@ -41,13 +39,13 @@ class her_sampler:
             # print(transitions['actions'].shape)  # 应该是 (N, 8)
             # combined = np.concatenate([transitions['obs'], transitions['g'], transitions['actions']], axis=-1)
             # print(combined.shape)  # 应该是 (N, 29 + 2 + 8) = (N, 39)
-
-            transitions['r'] = np.expand_dims(self.reward_func.r_hat_batch(np.concatenate([transitions['obs'], transitions['g'],transitions['actions']], axis=-1)), 1)
-            # reward_mean = np.mean(transitions['r'])
-            # print(f"Mean reward ours: {reward_mean}")
-
+            transitions['r'] = np.expand_dims(self.env.sparse_reward(transitions['ag_next'], transitions['g']), 1)
+            # print(f"her: {transitions['r']}")
+            for idx in range(transitions['r'].shape[0]):
+                if transitions['r'][idx] != 0:
+                    transitions['r'][idx] = np.expand_dims(self.reward_func.r_hat_batch(np.concatenate([transitions['obs'][idx], transitions['g'][idx],transitions['actions'][idx]], axis=-1)), 1)
+            # print(f"rm: {transitions['r']}")
         else:
-
             transitions['r'] = np.expand_dims(self.env.sparse_reward(transitions['ag_next'], transitions['g']), 1)
             # print(transitions['r'].shape)
             # reward_mean = np.mean(transitions['r'])
