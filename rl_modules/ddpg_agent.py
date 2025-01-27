@@ -116,7 +116,7 @@ class ddpg_agent:
         while True:
             start_time = time.time()
             try:
-                messages, self.llm_output = generator_reacher(position)
+                messages, self.llm_output = generator_four(position)
                 epsilon = np.random.uniform(0, 1)
                 if (epsilon < 0.3):
                     self.llm_output = check_quality(messages, self.llm_output)

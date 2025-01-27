@@ -10,7 +10,7 @@ def get_args():
     # the environment setting
     parser.add_argument('--env-name', type=str, default='ant_reacher', help='the environment name')
 
-    parser.add_argument('--n-epochs', type=int, default=50, help='the number of epochs to train the agent')  #500*100
+    parser.add_argument('--n-epochs', type=int, default=500, help='the number of epochs to train the agent')  #500*100
 
     parser.add_argument('--n-cycles', type=int, default=100, help='the times to collect samples per epoch')
 

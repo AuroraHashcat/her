@@ -21,7 +21,9 @@ test = False
 show = False
 her = True
 
-# python train.py --cuda cuda:1
+# ant_reacher: python train.py --cuda cuda:1 --seed 1
+# ant_four_rooms: python train.py --cuda cuda:3 --env-name ant_four_rooms --seed 1
+
 
 if(log == True and MPI.COMM_WORLD.Get_rank() == 0):
     import wandb
