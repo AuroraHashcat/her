@@ -6,7 +6,7 @@ from mpi4py import MPI
 from rl_modules.ddpg_agent import ddpg_agent
 import random
 import torch
-
+import wandb
 
 # gy = True: gym environment, False:AntReacher
 # log = True: wandb
@@ -25,27 +25,12 @@ her = True
 # ant_four_rooms: python train.py --cuda cuda:1 --env-name ant_four_rooms --seed 1
 
 
-if(log == True and MPI.COMM_WORLD.Get_rank() == 0):
-    import wandb
-    # cx's key
-    # os.environ["WANDB_API_KEY"] = "7345a4ba788b2d78ab6a78d185784b2ea818317e"
-    # jy's key
-    os.environ["WANDB_API_KEY"] = "9d317e91d5b56a3aa6f1fe7463d10fa81824ed45"
-    wandb.login()
-    wandb.init(
-        project="HER", name="apo_ant_4rooms_seed_4",group="apo_ant_4rooms"
-    )
-    os.environ["WANDB_MODE"] = "offline"
-
 def get_env_params(env):
     obs = env.reset()
     # close the environment
-    params = {'obs': obs['observation'].shape[0],
-            'goal': obs['desired_goal'].shape[0],
-            'action': env.action_space.shape[0],
-            'action_max': env.action_space.high[0],
-            }
-    params['max_timesteps'] = env._max_episode_steps
+    params = {'obs': obs['observation'].shape[0], 'goal': obs['desired_goal'].shape[0],
+              'action': env.action_space.shape[0], 'action_max': env.action_space.high[0],
+              'max_timesteps': env._max_episode_steps}
     return params
 
 def launch(args):
@@ -83,4 +68,20 @@ if __name__ == '__main__':
     os.environ['IN_MPI'] = '1'
     # get the params
     args = get_args()
+    if (log == True and MPI.COMM_WORLD.Get_rank() == 0):
+        task = args.env_name
+        seed = args.seed
+        name = f"apo_{task}_{seed}"
+        group = f"apo_{task}"
+
+        # cx's key
+        # os.environ["WANDB_API_KEY"] = "7345a4ba788b2d78ab6a78d185784b2ea818317e"
+        # jy's key
+        os.environ["WANDB_API_KEY"] = "9d317e91d5b56a3aa6f1fe7463d10fa81824ed45"
+        wandb.login()
+        wandb.init(
+            project="HER", name=name, group=group
+        )
+        os.environ["WANDB_MODE"] = "offline"
+
     launch(args)

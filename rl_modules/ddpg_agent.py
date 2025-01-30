@@ -116,7 +116,7 @@ class ddpg_agent:
         while True:
             start_time = time.time()
             try:
-                messages, self.llm_output = generator_four(position)
+                messages, self.llm_output = generator_reacher(position)
                 epsilon = np.random.uniform(0, 1)
                 if (epsilon < 0.3):
                     self.llm_output = check_quality(messages, self.llm_output)
@@ -270,7 +270,7 @@ class ddpg_agent:
 
                         g = self.env.get_next_goal(self.test)
                         g = self.env.project_state_to_end_goal(self.env.sim, g)
-                        self.goal_array.append(g)
+                        self.goal_array.append(g.tolist())
                         print("Next End Goal: ", self.goal_array[0])
                         obs = self.env.reset_sim(g)
                         print("Initial Ant Position: ", obs[:3])
