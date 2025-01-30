@@ -16,7 +16,7 @@ import wandb
 # PS: wandb记录的表名需要手动改。在wandb.init和ddpg_agent.py里。savemodel+seed
 import design_env
 gy = False
-log = True
+log = False
 test = False
 show = False
 her = True
@@ -41,7 +41,7 @@ def launch(args):
     if args.cuda:
         torch.cuda.manual_seed(args.seed + MPI.COMM_WORLD.Get_rank())
 
-    if gy == True:
+    if gy:
         env = gym.make(args.env_name)
         # set random seeds for reproduce
         env.seed(args.seed + MPI.COMM_WORLD.Get_rank())
@@ -68,7 +68,7 @@ if __name__ == '__main__':
     os.environ['IN_MPI'] = '1'
     # get the params
     args = get_args()
-    if (log == True and MPI.COMM_WORLD.Get_rank() == 0):
+    if log == True and MPI.COMM_WORLD.Get_rank() == 0:
         task = args.env_name
         seed = args.seed
         name = f"apo_{task}_{seed}"

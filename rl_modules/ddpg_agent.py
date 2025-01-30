@@ -61,7 +61,7 @@ class ddpg_agent:
         self.reward_model = RewardModel(state_dim, action_dim, goal_dim, args)
 
         # her sampler
-        if (self.gy == True):
+        if self.gy:
             self.her_module = her_sampler(self.args.replay_strategy, self.args.replay_k ,self.args,self.env,self.env.compute_reward)
         else:
             self.her_module = her_sampler(self.args.replay_strategy, self.args.replay_k, self.args , self.env,self.reward_model)
@@ -234,7 +234,7 @@ class ddpg_agent:
     def learn(self,log,show):
         # start to collect samples
         for epoch in range(self.args.n_epochs):    #1000
-            if (self.test == False):
+            if not self.test:
                 for cycle in range(self.args.n_cycles):      #100    episode
                     mb_obs, mb_ag, mb_g, mb_actions = [], [], [], []
                     for _ in range(self.args.num_rollouts_per_mpi):  #1
@@ -422,9 +422,9 @@ class ddpg_agent:
             
             if MPI.COMM_WORLD.Get_rank() == 0:
                 print('[{}] epoch is: {}, eval success rate is: {:.3f}'.format(datetime.now(), epoch, success_rate))
-                if (log == True):
+                if log:
                     wandb.log({"AntReacher/success rate": success_rate},step=self.step)
-                if (not self.test):
+                if not self.test:
                     torch.save([self.o_norm.mean, self.o_norm.std, self.g_norm.mean, self.g_norm.std, self.actor_network.state_dict()], \
                              f"{self.model_path}/apo_sparse_model_seed_{self.args.seed}.pt")
 
@@ -537,7 +537,7 @@ class ddpg_agent:
         actions_real = self.actor_network(inputs_norm_tensor)
         actor_loss = -self.critic_network(inputs_norm_tensor, actions_real).mean()
         actor_loss += self.args.action_l2 * (actions_real / self.env_params['action_max']).pow(2).mean()
-        if (log == True):
+        if log:
             wandb.log({"AntReacher/actor_loss": actor_loss,
                         "AntReacher/critic_loss": critic_loss},step=self.step)
         # start to update the network
